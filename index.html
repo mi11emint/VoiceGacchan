@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>画像と音声の合成アプリ</title>
+    <title>画像と音声の合成アプリ (複数音声対応)</title>
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <style>
         body {
@@ -96,6 +96,38 @@
             100% { opacity: 1; }
         }
 
+        /* 音声リストのスタイル */
+        .audio-list {
+            margin-top: 15px;
+            background-color: #f8fafc;
+            border-radius: 10px;
+            padding: 10px;
+        }
+
+        .audio-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            font-size: 0.85rem;
+        }
+
+        .audio-item:last-child { margin-bottom: 0; }
+
+        .delete-btn {
+            background-color: #fee2e2;
+            color: #ef4444;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
         .preview-area {
             width: 100%;
             aspect-ratio: 16 / 9;
@@ -117,10 +149,6 @@
         }
 
         .btn-save { background-color: #10b981; margin-top: 10px; }
-
-        audio { width: 100%; margin-top: 10px; }
-
-        /* 処理中のメッセージ表示 */
         #status-msg {
             text-align: center;
             font-size: 0.9rem;
@@ -133,7 +161,7 @@
 <body>
 
     <div class="app-container">
-        <h1>動画合成アプリ (Step 3)</h1>
+        <h1>動画合成アプリ (複数音声版)</h1>
 
         <div class="section">
             <label>① 画像を選ぶ</label>
@@ -142,166 +170,16 @@
         </div>
 
         <div class="section">
-            <label>② 音声を入れる</label>
+            <label>② 音声を入れる（複数追加できます）</label>
             <button id="record-btn" class="btn btn-record" style="margin-bottom: 10px;">🔴 マイクで録音スタート</button>
             
             <label for="audio-input" class="btn file-label">音声ファイルをアップロード</label>
-            <input type="file" id="audio-input" accept="audio/*">
+            <input type="file" id="audio-input" accept="audio/*" multiple>
             
-            <audio id="audio-preview" controls style="display: none;"></audio>
-        </div>
-
-        <div class="section">
-            <label>③ 動画を作って保存する</label>
-            <div id="preview-box" class="preview-area">
-                <span>ここに画像または完成した動画が表示されます</span>
+            <div id="audio-list-container" class="audio-list" style="display: none;">
+                <label style="font-size: 0.8rem; color: #64748b;">追加済みの音声：</label>
+                <div id="items-box"></div>
             </div>
-            
-            <div id="status-msg"></div>
-
-            <button id="create-video-btn" class="btn btn-save" style="margin-top: 15px;">🎬 動画を合成する</button>
         </div>
-    </div>
 
-    <script>
-        const imageInput = document.getElementById('image-input');
-        const audioInput = document.getElementById('audio-input');
-        const recordBtn = document.getElementById('record-btn');
-        const previewBox = document.getElementById('preview-box');
-        const audioPreview = document.getElementById('audio-preview');
-        const createVideoBtn = document.getElementById('create-video-btn');
-        const statusMsg = document.getElementById('status-msg');
-
-        // FFmpegオブジェクトの作成
-        const { createFFmpeg, fetchFile } = FFmpeg;
-        const ffmpeg = createFFmpeg({ log: true }); // ログをコンソールに出力する設定
-
-        let imageFile = null;  // 選択された画像ファイルそのもの
-        let audioBlob = null;  // 録音またはアップロードされた音データ
-        let mediaRecorder = null;
-        let audioChunks = [];
-
-        // --- ① 画像が選ばれた時の処理 ---
-        imageInput.addEventListener('change', (e) => {
-            imageFile = e.target.files[0];
-            if (imageFile) {
-                const url = URL.createObjectURL(imageFile);
-                previewBox.innerHTML = `<img src="${url}" alt="Preview">`;
-            }
-        });
-
-        // --- ② 音声ファイルがアップロードされた時の処理 ---
-        audioInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                audioBlob = file;
-                setupAudio(URL.createObjectURL(file));
-            }
-        });
-
-        // --- ③ マイク録音の処理 ---
-        recordBtn.addEventListener('click', async () => {
-            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream);
-                    audioChunks = [];
-
-                    mediaRecorder.addEventListener('dataavailable', (e) => {
-                        audioChunks.push(e.data);
-                    });
-
-                    mediaRecorder.addEventListener('stop', () => {
-                        audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
-                        setupAudio(URL.createObjectURL(audioBlob));
-                        stream.getTracks().forEach(track => track.stop());
-                    });
-
-                    mediaRecorder.start();
-                    recordBtn.textContent = '⏹️ 録音を止める';
-                    recordBtn.classList.add('btn-recording');
-                } catch (err) {
-                    alert('マイクの許可が得られませんでした。');
-                }
-            } else {
-                mediaRecorder.stop();
-                recordBtn.textContent = '🔴 マイクで録音スタート';
-                recordBtn.classList.remove('btn-recording');
-            }
-        });
-
-        function setupAudio(url) {
-            audioPreview.src = url;
-            audioPreview.style.display = 'block';
-        }
-
-        // --- 🎬 ④ 動画合成（FFmpeg）のメイン処理 ---
-        createVideoBtn.addEventListener('click', async () => {
-            if (!imageFile || !audioBlob) {
-                alert('画像と音声の両方を設定してください！');
-                return;
-            }
-
-            try {
-                createVideoBtn.disabled = true;
-                statusMsg.textContent = "準備中... (初回は10秒ほどかかります)";
-
-                // 1. FFmpegシステムの起動（まだ起動していなければ）
-                if (!ffmpeg.isLoaded()) {
-                    await ffmpeg.load();
-                }
-
-                statusMsg.textContent = "動画を合成中... スマホを閉じずに待ってね";
-
-                // 2. ブラウザ内の仮想メモリ空間にファイルを書き込む
-                ffmpeg.FS('writeFile', 'input_image.png', await fetchFile(imageFile));
-                ffmpeg.FS('writeFile', 'input_audio.mp3', await fetchFile(audioBlob));
-
-                // 3. FFmpegコマンドの実行（画像と音声を合わせて、自動圧縮してMP4にする命令）
-                // -loop 1: 画像をループ
-                // -shortest: 音楽の長さに合わせて動画を自動で終了させる
-                // -vcodec libx264: 最も一般的な圧縮方式（MP4動画）
-                // -pix_fmt yuv420p: スマホ（特にiPhone）で再生できるようにするおまじない
-                await ffmpeg.run(
-                    '-loop', '1', 
-                    '-i', 'input_image.png', 
-                    '-i', 'input_audio.mp3', 
-                    '-vcodec', 'libx264', 
-                    '-tune', 'stillimage',
-                    '-acodec', 'aac', 
-                    '-pix_fmt', 'yuv420p', 
-                    '-shortest', 
-                    'output.mp4'
-                );
-
-                statusMsg.textContent = "完成！ 保存します。";
-
-                // 4. 完成した動画ファイルを仮想空間から取り出す
-                const data = ffmpeg.FS('readFile', 'output.mp4');
-
-                // 5. 動画をブラウザで再生できるようにし、同時にダウンロード（保存）させる
-                const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
-                const videoURL = URL.createObjectURL(videoBlob);
-
-                // プレビューエリアを動画プレイヤーに書き換える
-                previewBox.innerHTML = `<video src="${videoURL}" controls></video>`;
-
-                // 自動ダウンロード（保存）処理の実行
-                const downloadLink = document.createElement('a');
-                downloadLink.href = videoURL;
-                downloadLink.download = 'mymovie.mp4'; // 保存時のファイル名
-                document.body.appendChild(downloadLink);
-                downloadLink.click();
-                document.body.removeChild(downloadLink);
-
-            } catch (error) {
-                console.error(error);
-                alert('エラーが発生しました。ファイルの形式を変えるか、もう一度お試しください。');
-            } finally {
-                createVideoBtn.disabled = false;
-                statusMsg.textContent = "";
-            }
-        });
-    </script>
-</body>
-</html>
+        
