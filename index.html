@@ -657,6 +657,14 @@
             targetCtx.fillRect(0, 0, w, h);
         }
 
+        function getBoostedValue(rawByteValue) {
+            // 小さな音の感度を底上げし、大きな音でも綺麗に収まる非線形マッピング
+            const normalized = rawByteValue / 255;
+            if (normalized === 0) return 0;
+            // 平方根をとることで、小さな値（小さな音）ほど上方に強く引っ張り上げられます
+            return Math.sqrt(normalized);
+        }
+
         function drawStaticWave() {
             clearCanvas(ctx, canvas.width, canvas.height);
             const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
@@ -688,25 +696,35 @@
                 ctx.beginPath();
                 ctx.moveTo(40, centerY);
 
-                // 静止時はきれいな波模様（サインカーブ）を描画
+                // 静止時：上の波模様を描く
                 for (let i = 0; i < pointsCount; i++) {
                     const x = 40 + i * spacing;
-                    const y = centerY + Math.sin(i * 0.3) * 15;
+                    const y = centerY - (4 + Math.sin(i * 0.3) * 12);
                     if (i === 0) ctx.lineTo(x, y);
                     else {
                         const prevX = 40 + (i - 1) * spacing;
-                        const prevY = centerY + Math.sin((i - 1) * 0.3) * 15;
+                        const prevY = centerY - (4 + Math.sin((i - 1) * 0.3) * 12);
                         ctx.bezierCurveTo((prevX + x) / 2, prevY, (prevX + x) / 2, y, x, y);
                     }
                 }
 
-                // 中心（地面）へ向かってパスを閉じて完全に塗りつぶす
-                ctx.lineTo(canvas.width - 40, centerY);
-                ctx.lineTo(40, centerY);
+                // 右端から鏡合わせ（下側）の波へ繋ぐ
+                ctx.lineTo(canvas.width - 40, centerY + (4 + Math.sin((pointsCount - 1) * 0.3) * 12));
+
+                // 静止時：下の波模様を右から左へ戻るように描く（鏡合わせ）
+                for (let i = pointsCount - 1; i >= 0; i--) {
+                    const x = 40 + i * spacing;
+                    const y = centerY + (4 + Math.sin(i * 0.3) * 12);
+                    const nextX = 40 + (i - 1) * spacing;
+                    const nextY = centerY + (4 + Math.sin((i - 1) * 0.3) * 12);
+                    if (i > 0) {
+                        ctx.bezierCurveTo((x + nextX) / 2, y, (x + nextX) / 2, nextY, nextX, nextY);
+                    }
+                }
+
                 ctx.closePath();
-                
                 ctx.save();
-                ctx.globalAlpha = 0.85; // 完全に塗りつぶしつつ、質感を出すための不透明度
+                ctx.globalAlpha = 0.85;
                 ctx.fill();
                 ctx.restore();
             }
@@ -728,8 +746,10 @@
                 const baseRadius = 140;
                 for (let i = 0; i < points; i++) {
                     const angle = (i / points) * Math.PI * 2;
-                    const audioValue = dataArr[i] / 255; 
-                    const waveLength = audioValue * 95; 
+                    // 小さな音のレスポンス補正を適用
+                    const boosted = getBoostedValue(dataArr[i]); 
+                    const waveLength = Math.max(3, boosted * 120); // 最小でも3px動き、最大120pxまで拡張
+                    
                     const startX = centerX + Math.cos(angle) * baseRadius;
                     const startY = centerY + Math.sin(angle) * baseRadius;
                     const endX = centerX + Math.cos(angle) * (baseRadius + waveLength);
@@ -743,8 +763,11 @@
                 for (let i = 0; i < barCount; i++) {
                     const angle = (i / barCount) * Math.PI * 2;
                     const dataIndex = Math.floor((i / barCount) * points);
-                    const audioValue = dataArr[dataIndex] / 255;
-                    const waveLength = Math.max(6, audioValue * 100); 
+                    
+                    // レスポンス補正
+                    const boosted = getBoostedValue(dataArr[dataIndex]);
+                    const waveLength = Math.max(8, boosted * 125); 
+                    
                     const startX = centerX + Math.cos(angle) * baseRadius;
                     const startY = centerY + Math.sin(angle) * baseRadius;
                     const endX = centerX + Math.cos(angle) * (baseRadius + waveLength);
@@ -752,43 +775,52 @@
                     targetCtx.beginPath(); targetCtx.moveTo(startX, startY); targetCtx.lineTo(endX, endY); targetCtx.stroke();
                 }
             } else if (currentWaveStyle === 'aurora') {
-                // 音声データから間引いてなめらかな頂点を生成
                 const usedPoints = 32; 
                 const spacing = (targetCanvas.width - 80) / (usedPoints - 1);
                 const centerY = targetCanvas.height / 2;
 
                 const coords = [];
                 for (let i = 0; i < usedPoints; i++) {
-                    // 低音・中音域が目立つようにマッピングを最適化
                     const dataIndex = Math.floor((i / usedPoints) * (points * 0.75));
-                    const audioValue = dataArr[dataIndex] / 255;
                     
-                    // 値を滑らかな線にするためのスケール調整（最大140pxの揺れ）
-                    const waveHeight = audioValue * 140; 
+                    // レスポンス補正をかけ、最小高さを担保
+                    const boosted = getBoostedValue(dataArr[dataIndex]);
+                    const waveHeight = Math.max(5, boosted * 145); 
+                    
                     const x = 40 + i * spacing;
-                    const y = centerY - waveHeight;
-                    coords.push({x, y});
+                    coords.push({x, waveHeight});
                 }
 
-                // パスを開始して波のラインを描画
                 targetCtx.beginPath();
-                targetCtx.moveTo(coords[0].x, centerY);
-                targetCtx.lineTo(coords[0].x, coords[0].y);
+                // 始点は左端の上の波から
+                targetCtx.moveTo(coords[0].x, centerY - coords[0].waveHeight);
 
-                // ベジェ曲線を用いて各点の間を滑らかに繋ぐ
+                // 1. まず上半分のベジェ曲線を左から右へと描く
                 for (let i = 1; i < usedPoints; i++) {
                     const prev = coords[i - 1];
                     const curr = coords[i];
-                    const cpX = (prev.x + curr.x) / 2; // 制御点X
-                    targetCtx.bezierCurveTo(cpX, prev.y, cpX, curr.y, curr.x, curr.y);
+                    const cpX = (prev.x + curr.x) / 2;
+                    const prevY = centerY - prev.waveHeight;
+                    const currY = centerY - curr.waveHeight;
+                    targetCtx.bezierCurveTo(cpX, prevY, cpX, currY, curr.x, currY);
                 }
 
-                // 終点から中心線（地面）に落とし、始点に戻ることで「内側」を完全に閉じ込める
-                targetCtx.lineTo(targetCanvas.width - 40, centerY);
-                targetCtx.lineTo(40, centerY);
+                // 右端から下半分の開始点へラインを繋ぐ
+                targetCtx.lineTo(coords[usedPoints - 1].x, centerY + coords[usedPoints - 1].waveHeight);
+
+                // 2. 次に下半分のベジェ曲線を右から左へと「鏡合わせ」で描き戻る
+                for (let i = usedPoints - 1; i > 0; i--) {
+                    const curr = coords[i];
+                    const next = coords[i - 1];
+                    const cpX = (curr.x + next.x) / 2;
+                    const currY = centerY + curr.waveHeight;
+                    const nextY = centerY + next.waveHeight;
+                    targetCtx.bezierCurveTo(cpX, currY, cpX, nextY, next.x, nextY);
+                }
+
+                // パスを閉じる
                 targetCtx.closePath();
 
-                // 隙間なく完全かつ綺麗に塗りつぶす（少し不透明度を上げることでグラデが映えます）
                 targetCtx.save();
                 targetCtx.globalAlpha = 0.9; 
                 targetCtx.fill();
@@ -900,7 +932,11 @@
             eqMid = audioCtx.createBiquadFilter(); eqMid.type = 'peaking'; eqMid.Q.value = 1.0; eqMid.frequency.value = 1000;
             eqHigh = audioCtx.createBiquadFilter(); eqHigh.type = 'highshelf'; eqHigh.frequency.value = 3200;
             gainNode = audioCtx.createGain();
+            
+            // 全体の感度を均一に高く拾うため、FFTサイズと連動して少し最適化
             analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
+            // 変化が滑らかに追従するようスムージング（初期値0.8）を調整
+            analyser.smoothingTimeConstant = 0.75; 
 
             audioSource.connect(eqLow);
             eqLow.connect(eqMid); eqMid.connect(eqHigh); eqHigh.connect(gainNode);
@@ -1020,6 +1056,7 @@
             const rEqHigh = renderAudioCtx.createBiquadFilter(); rEqHigh.type = 'highshelf'; rEqHigh.frequency.value = 3200; rEqHigh.gain.value = parseFloat(eqHighSlider.value);
             const rGain = renderAudioCtx.createGain(); rGain.gain.value = parseFloat(volSlider.value);
             const rAnalyser = renderAudioCtx.createAnalyser(); rAnalyser.fftSize = 256;
+            rAnalyser.smoothingTimeConstant = 0.75;
 
             bufferSource.connect(rEqLow); rEqLow.connect(rEqMid); rEqMid.connect(rEqHigh); rGain.connect(rAnalyser);
             rGain.connect(renderAudioCtx.destination);
