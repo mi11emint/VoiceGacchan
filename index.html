@@ -286,6 +286,28 @@
             border: none;
         }
 
+        .noise-cancel-btn {
+            width: 100%;
+            background: transparent;
+            color: #777777; 
+            border: 1px solid rgba(119, 119, 119, 0.4); 
+            padding: 5px 0;
+            font-family: 'Cinecaption', 'Courier New', sans-serif;
+            font-size: 0.65rem;
+            letter-spacing: 1.5px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 12px; 
+            border-radius: 4px;
+        }
+        .noise-cancel-btn.active {
+            color: #ffffff;
+            background: rgba(119, 119, 119, 0.4);
+            border-color: #ffffff;
+        }
+        .noise-cancel-btn:active { transform: scale(0.98); }
+
         .audio-reset-btn {
             width: 100%;
             background: transparent;
@@ -298,7 +320,7 @@
             text-align: center;
             cursor: pointer;
             transition: all 0.2s ease;
-            margin-top: 10px; 
+            margin-top: 6px; 
             border-radius: 4px;
         }
         .audio-reset-btn:hover { color: #555555; border-color: rgba(119, 119, 119, 0.8); }
@@ -477,6 +499,7 @@
                     </div>
                 </div>
 
+                <button id="noiseCancelBtn" class="noise-cancel-btn">NOISE CANCEL: OFF</button>
                 <button id="audioResetBtn" class="audio-reset-btn">RESET AUDIO</button>
             </div>
         </div>
@@ -563,6 +586,8 @@
         const eqLowSlider = document.getElementById('eqLowSlider');
         const eqMidSlider = document.getElementById('eqMidSlider');
         const eqHighSlider = document.getElementById('eqHighSlider');
+        
+        const noiseCancelBtn = document.getElementById('noiseCancelBtn');
         const audioResetBtn = document.getElementById('audioResetBtn'); 
         
         const IMG_PLAY = "https://img1.mitemin.net/li/cg/2jg2jml6ro43bl41msl7yqifog6_j3k_3u_3u_qb2.png";
@@ -590,6 +615,7 @@
         let isUserChangingIndex = false;
         let isRecording = false;
         let isPlayingRecorded = false;
+        let isNoiseCancelOn = false; // ノイズキャンセルの状態管理
 
         let gainNode = null, eqLow = null, eqMid = null, eqHigh = null, recordDestination = null;
 
@@ -647,6 +673,22 @@
         eqMidSlider.addEventListener('input', syncAudioParams);
         eqHighSlider.addEventListener('input', syncAudioParams);
 
+        // ノイズキャンセルボタンのトグルイベント
+        noiseCancelBtn.addEventListener('click', () => {
+            isNoiseCancelOn = !isNoiseCancelOn;
+            if (isNoiseCancelOn) {
+                noiseCancelBtn.classList.add('active');
+                noiseCancelBtn.innerText = "NOISE CANCEL: ON";
+            } else {
+                noiseCancelBtn.classList.remove('active');
+                noiseCancelBtn.innerText = "NOISE CANCEL: OFF";
+            }
+            // 録音中であれば、マイクストリームを一度再起動して設定を即時反映する
+            if (isRecording) {
+                restartRecordingStream();
+            }
+        });
+
         audioResetBtn.addEventListener('click', () => {
             volSlider.value = 1.0; eqLowSlider.value = -7; eqMidSlider.value = 3; eqHighSlider.value = -4;
             syncAudioParams();
@@ -658,10 +700,8 @@
         }
 
         function getBoostedValue(rawByteValue) {
-            // 小さな音の感度を底上げし、大きな音でも綺麗に収まる非線形マッピング
             const normalized = rawByteValue / 255;
             if (normalized === 0) return 0;
-            // 平方根をとることで、小さな値（小さな音）ほど上方に強く引っ張り上げられます
             return Math.sqrt(normalized);
         }
 
@@ -689,44 +729,12 @@
                     ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, endY); ctx.stroke();
                 }
             } else if (currentWaveStyle === 'aurora') {
-                const pointsCount = 60;
-                const spacing = (canvas.width - 80) / (pointsCount - 1);
                 const centerY = canvas.height / 2;
-
+                // 静止時は真ん中をすっと通る「きれいな1本の横線」にする
                 ctx.beginPath();
                 ctx.moveTo(40, centerY);
-
-                // 静止時：上の波模様を描く
-                for (let i = 0; i < pointsCount; i++) {
-                    const x = 40 + i * spacing;
-                    const y = centerY - (4 + Math.sin(i * 0.3) * 12);
-                    if (i === 0) ctx.lineTo(x, y);
-                    else {
-                        const prevX = 40 + (i - 1) * spacing;
-                        const prevY = centerY - (4 + Math.sin((i - 1) * 0.3) * 12);
-                        ctx.bezierCurveTo((prevX + x) / 2, prevY, (prevX + x) / 2, y, x, y);
-                    }
-                }
-
-                // 右端から鏡合わせ（下側）の波へ繋ぐ
-                ctx.lineTo(canvas.width - 40, centerY + (4 + Math.sin((pointsCount - 1) * 0.3) * 12));
-
-                // 静止時：下の波模様を右から左へ戻るように描く（鏡合わせ）
-                for (let i = pointsCount - 1; i >= 0; i--) {
-                    const x = 40 + i * spacing;
-                    const y = centerY + (4 + Math.sin(i * 0.3) * 12);
-                    const nextX = 40 + (i - 1) * spacing;
-                    const nextY = centerY + (4 + Math.sin((i - 1) * 0.3) * 12);
-                    if (i > 0) {
-                        ctx.bezierCurveTo((x + nextX) / 2, y, (x + nextX) / 2, nextY, nextX, nextY);
-                    }
-                }
-
-                ctx.closePath();
-                ctx.save();
-                ctx.globalAlpha = 0.85;
-                ctx.fill();
-                ctx.restore();
+                ctx.lineTo(canvas.width - 40, centerY);
+                ctx.stroke();
             }
         }
 
@@ -746,9 +754,8 @@
                 const baseRadius = 140;
                 for (let i = 0; i < points; i++) {
                     const angle = (i / points) * Math.PI * 2;
-                    // 小さな音のレスポンス補正を適用
                     const boosted = getBoostedValue(dataArr[i]); 
-                    const waveLength = Math.max(3, boosted * 120); // 最小でも3px動き、最大120pxまで拡張
+                    const waveLength = Math.max(3, boosted * 120); 
                     
                     const startX = centerX + Math.cos(angle) * baseRadius;
                     const startY = centerY + Math.sin(angle) * baseRadius;
@@ -764,7 +771,6 @@
                     const angle = (i / barCount) * Math.PI * 2;
                     const dataIndex = Math.floor((i / barCount) * points);
                     
-                    // レスポンス補正
                     const boosted = getBoostedValue(dataArr[dataIndex]);
                     const waveLength = Math.max(8, boosted * 125); 
                     
@@ -780,22 +786,32 @@
                 const centerY = targetCanvas.height / 2;
 
                 const coords = [];
+                let hasAudio = false;
+
                 for (let i = 0; i < usedPoints; i++) {
                     const dataIndex = Math.floor((i / usedPoints) * (points * 0.75));
-                    
-                    // レスポンス補正をかけ、最小高さを担保
+                    if (dataArr[dataIndex] > 0) hasAudio = true;
+
                     const boosted = getBoostedValue(dataArr[dataIndex]);
-                    const waveHeight = Math.max(5, boosted * 145); 
+                    const waveHeight = boosted * 145; 
                     
                     const x = 40 + i * spacing;
                     coords.push({x, waveHeight});
                 }
 
+                // 音が完全にゼロ（または無音）のときはきれいな直線を描く
+                if (!hasAudio) {
+                    targetCtx.beginPath();
+                    targetCtx.moveTo(40, centerY);
+                    targetCtx.lineTo(targetCanvas.width - 40, centerY);
+                    targetCtx.stroke();
+                    return;
+                }
+
                 targetCtx.beginPath();
-                // 始点は左端の上の波から
                 targetCtx.moveTo(coords[0].x, centerY - coords[0].waveHeight);
 
-                // 1. まず上半分のベジェ曲線を左から右へと描く
+                // 1. 上半分のベジェ曲線
                 for (let i = 1; i < usedPoints; i++) {
                     const prev = coords[i - 1];
                     const curr = coords[i];
@@ -805,10 +821,10 @@
                     targetCtx.bezierCurveTo(cpX, prevY, cpX, currY, curr.x, currY);
                 }
 
-                // 右端から下半分の開始点へラインを繋ぐ
+                // 右端を下半分に接続
                 targetCtx.lineTo(coords[usedPoints - 1].x, centerY + coords[usedPoints - 1].waveHeight);
 
-                // 2. 次に下半分のベジェ曲線を右から左へと「鏡合わせ」で描き戻る
+                // 2. 下半分の鏡合わせベジェ曲線
                 for (let i = usedPoints - 1; i > 0; i--) {
                     const curr = coords[i];
                     const next = coords[i - 1];
@@ -818,13 +834,70 @@
                     targetCtx.bezierCurveTo(cpX, currY, cpX, nextY, next.x, nextY);
                 }
 
-                // パスを閉じる
                 targetCtx.closePath();
 
                 targetCtx.save();
                 targetCtx.globalAlpha = 0.9; 
                 targetCtx.fill();
                 targetCtx.restore();
+            }
+        }
+
+        // 録音ストリームを起動する共通関数
+        async function startRecordingStream() {
+            // ノイズキャンセル設定値に基づいてマイクを要求
+            stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: { 
+                    echoCancellation: isNoiseCancelOn, 
+                    noiseSuppression: isNoiseCancelOn, 
+                    autoGainControl: isNoiseCancelOn 
+                } 
+            });
+            
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            source = audioCtx.createMediaStreamSource(stream);
+            
+            setupAudioNodes(source, true);
+
+            recordDestination = audioCtx.createMediaStreamDestination();
+            gainNode.connect(recordDestination);
+
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+        }
+
+        // 録音中にノイズキャンセルのON/OFFが切り替わった際の即時反映処理
+        async function restartRecordingStream() {
+            if (!isRecording || !mediaRecorder) return;
+            
+            // 現在のレコーダーを一時停止させずに、ストリームだけを入れ替える
+            if (stream) stream.getTracks().forEach(track => track.stop());
+            
+            try {
+                // 新しいノイズキャンセル設定でストリームを取得し直す
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { echoCancellation: isNoiseCancelOn, noiseSuppression: isNoiseCancelOn, autoGainControl: isNoiseCancelOn } 
+                });
+                
+                const newSource = audioCtx.createMediaStreamSource(stream);
+                
+                // ノードを再接続
+                eqLow = audioCtx.createBiquadFilter(); eqLow.type = 'lowshelf'; eqLow.frequency.value = 320;
+                eqMid = audioCtx.createBiquadFilter(); eqMid.type = 'peaking'; eqMid.Q.value = 1.0; eqMid.frequency.value = 1000;
+                eqHigh = audioCtx.createBiquadFilter(); eqHigh.type = 'highshelf'; eqHigh.frequency.value = 3200;
+                gainNode = audioCtx.createGain();
+                analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
+                analyser.smoothingTimeConstant = 0.75;
+
+                newSource.connect(eqLow);
+                eqLow.connect(eqMid); eqMid.connect(eqHigh); eqHigh.connect(gainNode);
+                gainNode.connect(analyser);
+                
+                // 既存の録音用MediaStreamDestinationへ繋ぎ直す
+                gainNode.connect(recordDestination);
+                syncAudioParams();
+
+            } catch (err) {
+                console.error("ストリームの動的切り替えに失敗しました:", err);
             }
         }
 
@@ -835,19 +908,8 @@
             try {
                 unlockMenus();
 
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
-                });
-                
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                source = audioCtx.createMediaStreamSource(stream);
-                
-                setupAudioNodes(source, true);
+                await startRecordingStream();
 
-                recordDestination = audioCtx.createMediaStreamDestination();
-                gainNode.connect(recordDestination);
-
-                dataArray = new Uint8Array(analyser.frequencyBinCount);
                 isRecording = true;
                 draw();
 
@@ -933,9 +995,7 @@
             eqHigh = audioCtx.createBiquadFilter(); eqHigh.type = 'highshelf'; eqHigh.frequency.value = 3200;
             gainNode = audioCtx.createGain();
             
-            // 全体の感度を均一に高く拾うため、FFTサイズと連動して少し最適化
             analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
-            // 変化が滑らかに追従するようスムージング（初期値0.8）を調整
             analyser.smoothingTimeConstant = 0.75; 
 
             audioSource.connect(eqLow);
