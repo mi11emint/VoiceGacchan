@@ -38,7 +38,6 @@
             z-index: 100;
             margin-bottom: 15px;
         }
-        /* 🌳 画像とキャンバスのサイズを完全に一致させるコンテナ */
         .game-container {
             position: relative;
             width: 450px;
@@ -49,7 +48,6 @@
             border-radius: 8px;
             overflow: hidden;
         }
-        /* 背面の大樹画像 */
         #treeImg {
             position: absolute;
             top: 0;
@@ -57,10 +55,9 @@
             width: 100%;
             height: 100%;
             object-fit: contain;
-            opacity: 0.6; /* 花がきれいに映えるように少し暗めに設定 */
+            opacity: 0.6; 
             z-index: 1;
         }
-        /* 前面の透明キャンバス */
         #gameCanvas {
             position: absolute;
             top: 0;
@@ -91,7 +88,7 @@
         let isPlaying = false, isGameOver = false;
         let timeLeft = 30, timerInterval, bloomProgress = 0, flowers = [];
 
-        // 🔄 秒間60回の描画ループを最初から起動
+        // 🔄 秒間60回の描画ループを最初から常時起動
         function animate() {
             drawGame();
             requestAnimationFrame(animate);
@@ -106,15 +103,14 @@
             timeLeft = 30;
             bloomProgress = 0;
 
-            // ⭐【花の配置】キャンバスの正確な中心（225, 225）を狙って丸く生成
+            // 🌸【花の配置】確実に画像の中央（225, 225）を中心にまあるく配置
             flowers = [];
             const totalFlowers = 350; 
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2; 
 
             for(let i = 0; i < totalFlowers; i++) {
-                let angle = Math.random() * Math.PI * 2; // 360度全方位
-                // 新しい大樹のバランスに合わせ、中心に密度を高く、綺麗な球状に広がる計算
+                let angle = Math.random() * Math.PI * 2; 
                 let dist = Math.pow(Math.random(), 0.8) * 140; 
                 
                 let fx = centerX + Math.cos(angle) * dist;
@@ -135,23 +131,37 @@
             // タイマー開始
             timerInterval = setInterval(() => {
                 timeLeft--;
+                
+                // 🛡️【安全装置】声が全く反応していなくても、1秒ごとに確実に約3.3%ずつ自動開花させる
+                // これにより、マイクの不調があっても絶対に花が咲きます！
+                if (bloomProgress < (30 - timeLeft) * 0.033) {
+                    bloomProgress = (30 - timeLeft) * 0.033;
+                }
+
                 if (timeLeft <= 0) endGame();
             }, 1000);
 
-            // マイクの起動
+            // マイクとオーディオの起動処理
             try {
                 audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // 🛡️ スマホのブラウザによる「音声ブロック」を強制解除する魔法の1行
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
+
                 const source = audioContext.createMediaStreamSource(audioStream);
                 analyser = audioContext.createAnalyser();
                 analyser.fftSize = 256; 
                 source.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
             } catch (err) {
-                console.log('マイクなしモードで実行します');
+                console.log('マイクなしモード（自動開花安全装置で動作します）');
             }
         });
 
+        // マイクから音を拾って開花をスムーズに進める計算
         function updateAudio() {
             if (!analyser) return;
             analyser.getByteFrequencyData(dataArray);
@@ -160,22 +170,23 @@
             let avg = total / dataArray.length;
 
             if (avg > 15) {
-                // 声を感知したら開花度を進める
-                bloomProgress += 0.001; 
+                // 声を感知しているときは、安全装置のスピードを追い抜いてグングン咲く
+                bloomProgress += 0.0012; 
                 if (bloomProgress > 1.1) bloomProgress = 1.1; 
             }
         }
 
+        // 画面を描画する処理（背景画像の上に透明な膜として重なっています）
         function drawGame() {
             if (isPlaying) {
                 updateAudio();
             }
 
-            // 前面の透明キャンバスを綺麗にクリア
+            // キャンバスを透明にクリア（下の世界樹画像が見えるように）
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             if (isPlaying) {
-                // 宝石の花をキャンバスに描画
+                // 宝石の花を上から重ねて描画
                 let now = Date.now();
                 flowers.forEach(f => {
                     if (bloomProgress >= f.requiredProgress) {
@@ -199,13 +210,13 @@
                     }
                 });
 
-                // UI表示
+                // 開花度と残り時間の表示
                 let displayPercent = Math.min(100, Math.floor(bloomProgress * 100));
                 ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = '16px sans-serif'; ctx.textAlign = 'left';
                 ctx.fillText(`世界樹の開花度: ${displayPercent}%`, 20, 35);
                 ctx.textAlign = 'right'; ctx.fillText(`TIME: ${timeLeft}s`, canvas.width - 20, 35);
 
-                // 30秒終了時のリザルト画面表示
+                // 30秒終了時の暗転リザルト表示
                 if (isGameOver) {
                     ctx.fillStyle = 'rgba(2, 2, 6, 0.95)'; 
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
