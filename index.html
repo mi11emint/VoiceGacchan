@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音声インベーダーゲーム！（感度アップ版）</title>
+    <title>音声インベーダー（移動ボタン付き）</title>
     <style>
         body {
             margin: 0;
@@ -16,14 +16,15 @@
             justify-content: center;
             height: 100vh;
             overflow: hidden;
+            user-select: none; /* ボタン連打時の誤選択防止 */
         }
         #gameCanvas {
             border: 2px solid #555;
             background-color: #000;
             max-width: 100%;
-            max-height: 70vh;
+            max-height: 60vh;
         }
-        button {
+        #startBtn {
             padding: 12px 24px;
             font-size: 18px;
             background-color: #0fa;
@@ -38,18 +39,50 @@
             color: #aaa;
             margin-bottom: 5px;
         }
+        /* 🕹 左右移動ボタンのスタイル */
+        .controls {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            max-width: 400px;
+            margin-top: 15px;
+            padding: 0 10px;
+            box-sizing: border-box;
+        }
+        .btn-move {
+            width: 45%;
+            height: 60px;
+            font-size: 24px;
+            font-weight: bold;
+            background-color: #333;
+            color: #fff;
+            border: 2px solid #555;
+            border-radius: 10px;
+            cursor: pointer;
+            touch-action: manipulation; /* スマホでの連打ズームを防止 */
+        }
+        .btn-move:active {
+            background-color: #555;
+        }
     </style>
 </head>
 <body>
 
-    <div id="info">【声で撃て！】小さい声でも反応します 🎤</div>
+    <div id="info">【声で撃て！】下のボタンで左右に動けます ◀ ▶</div>
     <button id="startBtn">ゲームスタート</button>
     <canvas id="gameCanvas" width="400" height="500"></canvas>
+
+    <div class="controls">
+        <button id="leftBtn" class="btn-move">◀</button>
+        <button id="rightBtn" class="btn-move">▶</button>
+    </div>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const startBtn = document.getElementById('startBtn');
+        const leftBtn = document.getElementById('leftBtn');
+        const rightBtn = document.getElementById('rightBtn');
 
         let audioContext;
         let analyser;
@@ -65,17 +98,43 @@
         // オブジェクト管理
         let bullets = [];
         let invaders = [];
-        let player = { x: canvas.width / 2, y: canvas.height - 40 };
+        let player = { x: canvas.width / 2, y: canvas.height - 40, speed: 5 };
+
+        // ボタンの入力状態フラグ
+        let moveLeft = false;
+        let moveRight = false;
 
         // 音声用
         let voiceDuration = 0;
         let isBeaming = false;
         let invaderSpawnTimer = 0;
 
+        // 🕹 左右ボタンのイベント設定（スマホのタッチとPCのクリック両対応）
+        const setBtnEvent = (btn, startFlag, endFlag) => {
+            btn.addEventListener('mousedown', () => { if(isPlaying) startFlag() });
+            btn.addEventListener('mouseup', () => { endFlag() });
+            btn.addEventListener('mouseleave', () => { endFlag() });
+            
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); if(isPlaying) startFlag() });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); endFlag() });
+        };
+
+        setBtnEvent(leftBtn, () => moveLeft = true, () => moveLeft = false);
+        setBtnEvent(rightBtn, () => moveRight = true, () => moveRight = false);
+
+        // PCのキーボード（← / →）でも動かせるようにオマケ機能
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') moveLeft = true;
+            if (e.key === 'ArrowRight') moveRight = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft') moveLeft = false;
+            if (e.key === 'ArrowRight') moveRight = false;
+        });
+
         startBtn.addEventListener('click', async () => {
             if (isPlaying) return;
             try {
-                // マイクアクセスの許可を取得
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioContext.createMediaStreamSource(stream);
@@ -84,7 +143,6 @@
                 source.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-                // 初期化
                 isPlaying = true;
                 isGameOver = false;
                 score = 0;
@@ -93,28 +151,24 @@
                 invaders = [];
                 startBtn.style.display = 'none';
 
-                // カウントダウンタイマー開始
                 timerInterval = setInterval(() => {
                     timeLeft--;
-                    if (timeLeft <= 0) {
-                        endGame();
-                    }
+                    if (timeLeft <= 0) endGame();
                 }, 1000);
 
-                // ゲームループ開始
                 gameLoop();
             } catch (err) {
-                alert('マイクの許可が必要です。ブラウザの設定を確認してください：' + err);
+                alert('マイクの許可が必要です：' + err);
             }
         });
 
         function gameLoop() {
             if (!isPlaying) return;
 
-            updateAudio(); // 音声の解析
-            updateGame();  // ゲーム状態の更新（インベーダーの移動・出現など）
-            checkCollisions(); // 当たり判定
-            drawGame();    // 描画
+            updateAudio();
+            updateGame();
+            checkCollisions();
+            drawGame();
 
             if (!isGameOver) {
                 requestAnimationFrame(gameLoop);
@@ -123,22 +177,18 @@
 
         function updateAudio() {
             if (!analyser) return;
-            
             analyser.getByteFrequencyData(dataArray);
             let total = 0;
             for (let i = 0; i < dataArray.length; i++) total += dataArray[i];
             let volume = total / dataArray.length;
 
-            // ⭐ 感度調整：35から15に下げました（小さい声でも反応）
-            const threshold = 15; 
+            const threshold = 15; // 高感度
 
             if (volume > threshold) {
                 voiceDuration++;
-                // 15フレーム（約0.25秒）声が続いたらビーム
                 if (voiceDuration > 15) isBeaming = true;
 
                 if (isBeaming) {
-                    // ビーム発射（声の大きさに応じて太さが変わる）
                     bullets.push({
                         x: player.x,
                         y: player.y - 10,
@@ -149,7 +199,6 @@
                         isBeam: true
                     });
                 } else {
-                    // 通常弾発射（5フレームに1発）
                     if (voiceDuration % 5 === 1) {
                         bullets.push({
                             x: player.x,
@@ -168,20 +217,28 @@
         }
 
         function updateGame() {
+            // 自機の移動処理
+            if (moveLeft) player.x -= player.speed;
+            if (moveRight) player.x += player.speed;
+
+            // 画面外に飛び出さないようにストッパー
+            if (player.x < 20) player.x = 20;
+            if (player.x > canvas.width - 20) player.x = canvas.width - 20;
+
             // 弾の移動
             for (let i = bullets.length - 1; i >= 0; i--) {
                 bullets[i].y -= bullets[i].speed;
                 if (bullets[i].y < -50) bullets.splice(i, 1);
             }
 
-            // ⭐ インベーダーの自動生成（音声に関係なく1秒弱に1回降ってくるように修正）
+            // インベーダーの出現
             invaderSpawnTimer++;
-            if (invaderSpawnTimer > 45) {
+            if (invaderSpawnTimer > 40) {
                 invaders.push({
                     x: Math.random() * (canvas.width - 50) + 25,
                     y: -20,
                     size: 22,
-                    speed: 1.2 + Math.random() * 1.5 // 降りてくる速度
+                    speed: 1.2 + Math.random() * 1.5
                 });
                 invaderSpawnTimer = 0;
             }
@@ -190,40 +247,31 @@
             for (let i = invaders.length - 1; i >= 0; i--) {
                 invaders[i].y += invaders[i].speed;
 
-                // 一番下まで攻め込まれたらゲーム終了（今回はデモ用なので終了のみ、スコアは残る）
-                if (invaders[i].y > canvas.height - 60) {
-                    endGame();
+                // ⭐ 修正：一番下まで来たら、ゲーム終了せずに消滅させるだけにする
+                if (invaders[i].y > canvas.height + 20) {
+                    invaders.splice(i, 1);
                 }
             }
         }
 
-        // 当たり判定
         function checkCollisions() {
             for (let b = bullets.length - 1; b >= 0; b--) {
                 for (let i = invaders.length - 1; i >= 0; i--) {
                     let bullet = bullets[b];
                     let invader = invaders[i];
-
                     if (!bullet || !invader) continue;
 
                     let hit = false;
-
                     if (bullet.isBeam) {
-                        // ビーム（四角）とインベーダー（円）の判定
                         let closeX = Math.max(bullet.x - bullet.width/2, Math.min(invader.x, bullet.x + bullet.width/2));
                         let closeY = Math.max(bullet.y, Math.min(invader.y, bullet.y + bullet.height));
                         let distanceX = invader.x - closeX;
                         let distanceY = invader.y - closeY;
-                        if ((distanceX * distanceX + distanceY * distanceY) < (invader.size * invader.size)) {
-                            hit = true;
-                        }
+                        if ((distanceX * distanceX + distanceY * distanceY) < (invader.size * invader.size)) hit = true;
                     } else {
-                        // 通常弾（円）とインベーダー（円）の判定
                         let dx = bullet.x - invader.x;
                         let dy = bullet.y - invader.y;
-                        if (Math.sqrt(dx * dx + dy * dy) < (bullet.radius + invader.size)) {
-                            hit = true;
-                        }
+                        if (Math.sqrt(dx * dx + dy * dy) < (bullet.radius + invader.size)) hit = true;
                     }
 
                     if (hit) {
@@ -239,7 +287,6 @@
         }
 
         function drawGame() {
-            // 背景
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -260,7 +307,7 @@
                 }
             });
 
-            // インベーダー（👾）
+            // インベーダー
             invaders.forEach(invader => {
                 ctx.font = `${invader.size * 1.3}px sans-serif`;
                 ctx.textAlign = 'center';
@@ -284,15 +331,11 @@
                 ctx.fillStyle = '#fff';
                 ctx.textAlign = 'center';
                 ctx.font = '24px sans-serif';
-                ctx.fillText('保存が完了しました！', canvas.width / 2, canvas.height / 2 - 40);
+                ctx.fillText('ゲーム終了！', canvas.width / 2, canvas.height / 2 - 20);
                 
                 ctx.fillStyle = '#0fa';
                 ctx.font = '22px sans-serif';
-                ctx.fillText(`最終スコア: ${score}`, canvas.width / 2, canvas.height / 2 + 10);
-
-                ctx.fillStyle = '#aaa';
-                ctx.font = '14px sans-serif';
-                ctx.fillText('画面を閉じて動画を確認してください。', canvas.width / 2, canvas.height / 2 + 60);
+                ctx.fillText(`最終スコア: ${score}`, canvas.width / 2, canvas.height / 2 + 30);
             }
         }
 
