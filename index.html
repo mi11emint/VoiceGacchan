@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音声リズムゲーム（超巨大＆限界発光花火版）</title>
+    <title>音声リズムゲーム（50倍・世界樹大満開フラッシュ版）</title>
     <style>
         body {
             margin: 0;
@@ -38,7 +38,7 @@
 
     <div id="info">・・・保存待ち時間中・・・<br><br>
       音声リズムゲーム<br>
-      声や音で下枠○を狙って！ 5コンボで画面を覆う大花火🎇^.ˬ.^</div>
+      声や音で下枠○を狙って！ 5コンボで画面を染める50倍大発光！✨^.ˬ.^</div>
     <canvas id="gameCanvas" width="400" height="500"></canvas>
 
     <script>
@@ -69,7 +69,7 @@
         let notes = [];
         let nextSpawnCountdown = 0;
         let hitEffects = [];
-        let fireworks = []; // ⭐ 超巨大花火用配列
+        let fireworks = []; 
 
         let lastVolume = 0;
         let inputCooldown = 0;
@@ -235,15 +235,15 @@
                 if (hitEffects[i].alpha <= 0) hitEffects.splice(i, 1);
             }
 
-            // ⭐ 超巨大＆限界発光花火のアップデート処理
+            // ⭐ 50倍・超銀河スケール花火のアップデート処理
             for (let i = fireworks.length - 1; i >= 0; i--) {
                 let fw = fireworks[i];
                 fw.delay--;
                 if (fw.delay <= 0) {
                     fw.state = "explode";
-                    fw.alpha -= 0.012; // さらにゆっくりと余韻を残して消える
+                    fw.alpha -= 0.008; // 画面が真っ白に染まる時間を長くするため、よりゆっくり消えるように
                     fw.radius += fw.expandSpeed; 
-                    fw.expandSpeed *= 0.97; // 巨大さを出すため、減速率を低く（なかなか止まらない）
+                    fw.expandSpeed *= 0.98; // 驚異的な広がりをキープ
                 }
                 if (fw.alpha <= 0) fireworks.splice(i, 1);
             }
@@ -294,26 +294,24 @@
             }
         }
 
-        // ⭐ コンボMAXで画面を覆い尽くす超巨大・限界発光花火を生成
+        // ⭐【50倍設定】キャンバスを遥かに超えて空間を焼き尽くす一撃
         function triggerFireworkShow() {
-            // パステルカラーに、より発光が強い白とネオンブルーを追加
             const pastelColors = ["#ffffff", "#ffb7d5", "#b2ebf2", "#fff59d", "#e0ffff", "#e1bee7"];
-            for (let i = 0; i < 6; i++) {
-                // 画面全体に大きく広がるように配置
-                let fireworkX = Math.random() * (canvas.width - 60) + 30;
-                let fireworkY = Math.random() * 250 + 80; 
+            for (let i = 0; i < 4; i++) {
+                // 画面の中心付近から圧倒的な光を放つ
+                let fireworkX = canvas.width / 2 + (Math.random() * 100 - 50);
+                let fireworkY = canvas.height / 2 + (Math.random() * 100 - 100); 
 
                 fireworks.push({
                     x: fireworkX,
                     y: fireworkY,
-                    radius: 3,
-                    // ⭐【巨大化】これまでの2倍以上！画面からはみ出るレベル
-                    maxRadius: Math.random() * 50 + 110, 
-                    // ⭐【爆速】一瞬で画面を覆うスピード
-                    expandSpeed: 8.0 + Math.random() * 4.0, 
+                    radius: 5,
+                    // ⭐【前のコードの50倍スケールへ】
+                    maxRadius: (Math.random() * 20 + 35) * 50, // 最大半径 約1750〜2750（画面の4倍以上）
+                    expandSpeed: 45.0 + Math.random() * 15.0, // 爆速で画面を飲み込む
                     color: pastelColors[Math.floor(Math.random() * pastelColors.length)],
                     alpha: 1.0, 
-                    delay: i * 3, // ポポポンッとほぼ同時に咲く
+                    delay: i * 4, 
                     state: "wait"
                 });
             }
@@ -324,41 +322,30 @@
             ctx.fillStyle = '#020206';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // ⭐ 超巨大・限界発光花火（世界樹満開モード）の描画処理
+            // ⭐ 50倍・限界突破発光の描画処理
             fireworks.forEach(fw => {
                 if (fw.state === "explode") {
                     ctx.save();
-                    // ⭐ フェードアウトを少し遅らせて、まばゆさを維持
                     ctx.globalAlpha = fw.alpha;
                     
-                    // ⭐【限界発光】4層の光のオーラを重ねて、圧倒的なまばゆさを表現
-                    
-                    // 1層目（最外層）：巨大な淡いパステル光（世界樹の影）
-                    ctx.shadowBlur = fw.radius * 3.5; 
+                    // ⭐ 50倍のスケールに合わせて影のぼかし（発光オーラ）も限界突破
+                    // 1層目：超巨大な空間全体のカラーフェード
+                    ctx.shadowBlur = Math.min(fw.radius * 0.5, 150); // ブラウザの負荷限界を考慮しつつ最大化
                     ctx.shadowColor = fw.color;
                     ctx.strokeStyle = fw.color;
-                    ctx.lineWidth = 6;
+                    ctx.lineWidth = 12;
                     ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius, 0, Math.PI * 2); ctx.stroke();
                     
-                    // 2層目：強いネオン光の輪
-                    ctx.shadowBlur = fw.radius * 1.2;
-                    ctx.shadowColor = "#ffffff";
-                    ctx.strokeStyle = fw.color;
-                    ctx.lineWidth = 15;
-                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius * 0.9, 0, Math.PI * 2); ctx.stroke();
+                    // 2層目：画面全体を染め上げるネオンの波
+                    ctx.strokeStyle = "#ffffff";
+                    ctx.lineWidth = 30;
+                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius * 0.7, 0, Math.PI * 2); ctx.stroke();
                     
-                    // 3層目：真っ白な芯の光の輪（世界樹の幹の光）
-                    ctx.shadowBlur = 30;
-                    ctx.shadowColor = "#ffffff";
-                    ctx.lineWidth = 5;
-                    ctx.strokeStyle = "#ffffff"; 
-                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius * 0.85, 0, Math.PI * 2); ctx.stroke();
-                    
-                    // 4層目（最内層）：画面を白く飛ばすほどの中心コア
+                    // 3層目：真っ白に燃え盛る巨大な核
                     ctx.fillStyle = "#ffffff";
-                    ctx.shadowBlur = 50;
+                    ctx.shadowBlur = 100;
                     ctx.shadowColor = "#ffffff";
-                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius * 0.2, 0, Math.PI * 2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius * 0.3, 0, Math.PI * 2); ctx.fill();
                     
                     ctx.restore();
                 }
@@ -446,7 +433,6 @@
             clearInterval(timerInterval);
             drawGame();
             
-            // ⭐【重要】マイクのストリームを完全にストップし、接続を強制終了します
             if (audioStream) {
                 audioStream.getTracks().forEach(track => track.stop());
             }
