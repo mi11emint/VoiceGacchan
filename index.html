@@ -38,15 +38,18 @@
             z-index: 100;
             margin-bottom: 15px;
         }
-        /* 🌳 画像とキャンバスをぴったり重ねるためのコンテナ */
+        /* 🌳 画像とキャンバスのサイズを完全に一致させるコンテナ */
         .game-container {
             position: relative;
             width: 450px;
             height: 450px;
-            max-width: 95vw;
+            max-width: 90vw;
             max-height: 60vh;
+            background-color: #020205;
+            border-radius: 8px;
+            overflow: hidden;
         }
-        /* 背景の大樹画像（HTMLで確実に表示） */
+        /* 背面の大樹画像 */
         #treeImg {
             position: absolute;
             top: 0;
@@ -54,10 +57,10 @@
             width: 100%;
             height: 100%;
             object-fit: contain;
-            opacity: 0.6; /* 花が見えやすいように少しだけ薄くします */
+            opacity: 0.6; /* 花がきれいに映えるように少し暗めに設定 */
             z-index: 1;
         }
-        /* 花を描く透明なキャンバス */
+        /* 前面の透明キャンバス */
         #gameCanvas {
             position: absolute;
             top: 0;
@@ -65,7 +68,7 @@
             width: 100%;
             height: 100%;
             z-index: 2;
-            pointer-events: none; /* キャンバス越しでも下の操作を邪魔しない */
+            pointer-events: none;
         }
     </style>
 </head>
@@ -75,8 +78,8 @@
     <button id="startBtn">世界樹の声を聴く</button>
 
     <div class="game-container">
-        <img id="treeImg" src="https://img1.mitemin.net/g3/mj/2txw8fapepkqd1o8fs86c53z4c_9vl_18g_18g_3cih.png" alt="世界樹">
-        <canvas id="gameCanvas" width="500" height="500"></canvas>
+        <img id="treeImg" src="https://img1.mitemin.net/cn/c9/5h3rb7a49bj373z8gxyk7s3t40_k6d_vu_yx_5kna.png" alt="世界樹">
+        <canvas id="gameCanvas" width="450" height="450"></canvas>
     </div>
 
     <script>
@@ -88,7 +91,7 @@
         let isPlaying = false, isGameOver = false;
         let timeLeft = 30, timerInterval, bloomProgress = 0, flowers = [];
 
-        // 🔄 常に画面を秒間60回描き直すループ（これで花がアニメーションします）
+        // 🔄 秒間60回の描画ループを最初から起動
         function animate() {
             drawGame();
             requestAnimationFrame(animate);
@@ -98,21 +101,21 @@
         startBtn.addEventListener('click', async () => {
             if (isPlaying) return;
 
-            // ボタンは消さずに、ゲーム状態だけをリセットしてスタート
             isPlaying = true;
             isGameOver = false;
             timeLeft = 30;
             bloomProgress = 0;
 
-            // ⭐【花の配置】画像の中央付近（250, 230）から丸く円状に広がるように生成
+            // ⭐【花の配置】キャンバスの正確な中心（225, 225）を狙って丸く生成
             flowers = [];
-            const totalFlowers = 300; 
+            const totalFlowers = 350; 
             const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2 - 20; 
+            const centerY = canvas.height / 2; 
 
             for(let i = 0; i < totalFlowers; i++) {
                 let angle = Math.random() * Math.PI * 2; // 360度全方位
-                let dist = Math.pow(Math.random(), 0.85) * 140; // 綺麗な丸い形に密集
+                // 新しい大樹のバランスに合わせ、中心に密度を高く、綺麗な球状に広がる計算
+                let dist = Math.pow(Math.random(), 0.8) * 140; 
                 
                 let fx = centerX + Math.cos(angle) * dist;
                 let fy = centerY + Math.sin(angle) * dist;
@@ -157,7 +160,8 @@
             let avg = total / dataArray.length;
 
             if (avg > 15) {
-                bloomProgress += 0.00085; 
+                // 声を感知したら開花度を進める
+                bloomProgress += 0.001; 
                 if (bloomProgress > 1.1) bloomProgress = 1.1; 
             }
         }
@@ -167,12 +171,11 @@
                 updateAudio();
             }
 
-            // キャンバスをクリア（透明にするため、背景色は塗らずに透明に消去します）
+            // 前面の透明キャンバスを綺麗にクリア
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // ゲーム中の場合、またはゲームオーバー画面の場合のみ描画
             if (isPlaying) {
-                // 宝石の花の描画
+                // 宝石の花をキャンバスに描画
                 let now = Date.now();
                 flowers.forEach(f => {
                     if (bloomProgress >= f.requiredProgress) {
@@ -199,18 +202,18 @@
                 // UI表示
                 let displayPercent = Math.min(100, Math.floor(bloomProgress * 100));
                 ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = '16px sans-serif'; ctx.textAlign = 'left';
-                ctx.fillText(`世界樹の開花度: ${displayPercent}%`, 25, 40);
-                ctx.textAlign = 'right'; ctx.fillText(`TIME: ${timeLeft}s`, canvas.width - 25, 40);
+                ctx.fillText(`世界樹の開花度: ${displayPercent}%`, 20, 35);
+                ctx.textAlign = 'right'; ctx.fillText(`TIME: ${timeLeft}s`, canvas.width - 20, 35);
 
                 // 30秒終了時のリザルト画面表示
                 if (isGameOver) {
                     ctx.fillStyle = 'rgba(2, 2, 6, 0.95)'; 
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                     
-                    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '22px sans-serif';
-                    ctx.fillText('時の砂が尽きました', 250, 210);
-                    ctx.fillStyle = '#e1bee7'; ctx.font = 'bold 26px sans-serif';
-                    ctx.fillText(`最終開花度: ${displayPercent}%`, 250, 260);
+                    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '20px sans-serif';
+                    ctx.fillText('時の砂が尽きました', canvas.width / 2, canvas.height / 2 - 25);
+                    ctx.fillStyle = '#e1bee7'; ctx.font = 'bold 24px sans-serif';
+                    ctx.fillText(`最終開花度: ${displayPercent}%`, canvas.width / 2, canvas.height / 2 + 25);
                 }
             }
         }
@@ -219,13 +222,11 @@
             isGameOver = true;
             clearInterval(timerInterval);
             
-            // マイクを確実に切断してオフにする
             if (audioStream) audioStream.getTracks().forEach(t => t.stop());
             if (audioContext) audioContext.close();
             
             setTimeout(() => {
                 isPlaying = false;
-                // 次にまた遊べるように状態を戻す
             }, 2500);
         }
     </script>
