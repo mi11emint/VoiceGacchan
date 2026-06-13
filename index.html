@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音声リズムゲーム（動画保存中版）</title>
+    <title>音声リズムゲーム（3レーン版）</title>
     <style>
         body {
             margin: 0;
@@ -22,28 +22,50 @@
             border: 2px solid #223;
             background-color: #010105;
             max-width: 100%;
-            max-height: 70vh;
+            max-height: 65vh;
             box-shadow: 0 0 25px rgba(0,255,255,0.08);
+            cursor: pointer;
         }
         #info {
-            font-size: 12px;
+            font-size: 13px;
             color: #e0ffff;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             text-align: center;
             padding: 0 20px;
+            line-height: 1.5;
+        }
+        /* マイク（声）の入力インジケーター */
+        #micIndicator {
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: #222;
+            color: #555;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+            font-weight: bold;
+        }
+        #micIndicator.active {
+            background: #00ffff;
+            color: #000;
+            box-shadow: 0 0 10px #00ffff;
         }
     </style>
 </head>
 <body>
 
-    <div id="info">・・・保存待ち時間中・・・<br><br>
-      音声リズムゲーム<br>
-      声や音で下枠○を狙って！^.ˬ.^ฅⳊ</div>
+    <div id="info">・・・保存待ち時間中・・・<br>
+      🎤「あーー」と声を出しながら<br>
+      下枠〇に重なるノーツをタイミングよくタップ！</div>
+      
+    <div id="micIndicator">🎤 VOICE OFF</div>
+    
     <canvas id="gameCanvas" width="400" height="500"></canvas>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const micIndicator = document.getElementById('micIndicator');
 
         let audioContext;
         let analyser;
@@ -60,19 +82,18 @@
         let timeLeft = 30;
         let timerInterval;
 
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
+        // 3レーンのX座標（左・中央・右）
+        const laneXs = [80, 200, 320];
         const spawnY = 80;
         const judgeLowY = canvas.height - 70;
-        const targetRadius = 32; // 判定用の〇のサイズ
+        const targetRadius = 26;
 
         let notes = [];
         let nextSpawnCountdown = 0;
         let hitEffects = [];
         let fireworks = []; 
 
-        let lastVolume = 0;
-        let inputCooldown = 0;
+        let isVoiceDetected = false; // 現在声が出ているかどうかのフラグ
 
         // 🚀 画面が開いた瞬間に自動でマイク許可を取り、カウントダウンを開始する処理
         window.addEventListener('DOMContentLoaded', async () => {
@@ -89,7 +110,7 @@
 
                 const source = audioContext.createMediaStreamSource(audioStream);
                 analyser = audioContext.createAnalyser();
-                analyser.fftSize = 512; 
+                analyser.fftSize = 256; 
                 source.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
 
@@ -99,9 +120,40 @@
                 ctx.fillStyle = '#fff';
                 ctx.textAlign = 'center';
                 ctx.font = '14px sans-serif';
-                ctx.fillText('マイクを許可、または接続してください', centerX, centerY);
+                ctx.fillText('マイクを許可、または接続してください', canvas.width/2, canvas.height/2);
                 console.log('マイク起動エラー：', err);
             }
+        });
+
+        // タップ（クリック）イベントの設定
+        const handleTap = (clientX, clientY) => {
+            if (!isPlaying || isGameOver) return;
+
+            // キャンバス内のタッチ座標を正確に計算
+            const rect = canvas.getBoundingClientRect();
+            const tapX = (clientX - rect.left) * (canvas.width / rect.width);
+            const tapY = (clientY - rect.top) * (canvas.height / rect.height);
+
+            // どのレーンが叩かれたかを判定（横幅を3分割して一番近いレーンを探す）
+            let clickedLane = -1;
+            let minDiff = 999;
+            for (let i = 0; i < laneXs.length; i++) {
+                let diff = Math.abs(tapX - laneXs[i]);
+                if (diff < 50 && diff < minDiff) {
+                    minDiff = diff;
+                    clickedLane = i;
+                }
+            }
+
+            if (clickedLane !== -1) {
+                checkJudgment(clickedLane);
+            }
+        };
+
+        canvas.addEventListener('mousedown', (e) => handleTap(e.clientX, e.clientY));
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleTap(e.touches[0].clientX, e.touches[0].clientY);
         });
 
         // ⏱️ カウントダウン処理
@@ -124,15 +176,14 @@
                 ctx.fillStyle = '#020206';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+                // レーンの背景線描画
                 ctx.strokeStyle = '#101025';
                 ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo(centerX, spawnY); ctx.lineTo(centerX, judgeLowY);
-                ctx.stroke();
-
-                ctx.strokeStyle = 'rgba(0, 150, 255, 0.2)'; 
-                ctx.lineWidth = 4;
-                ctx.beginPath(); ctx.arc(centerX, judgeLowY, targetRadius, 0, Math.PI * 2); ctx.stroke();
+                laneXs.forEach(x => {
+                    ctx.beginPath(); ctx.moveTo(x, spawnY); ctx.lineTo(x, judgeLowY); ctx.stroke();
+                    ctx.strokeStyle = 'rgba(0, 150, 255, 0.15)'; 
+                    ctx.beginPath(); ctx.arc(x, judgeLowY, targetRadius, 0, Math.PI * 2); ctx.stroke();
+                });
 
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
@@ -140,16 +191,11 @@
                 
                 if (countdownNumber > 0) {
                     ctx.fillStyle = '#00ffff';
-                    ctx.shadowBlur = 20;
-                    ctx.shadowColor = '#00ffff';
-                    ctx.fillText(countdownNumber, centerX, centerY);
+                    ctx.fillText(countdownNumber, canvas.width / 2, canvas.height / 2);
                 } else {
                     ctx.fillStyle = '#ffffff';
-                    ctx.shadowBlur = 25;
-                    ctx.shadowColor = '#ffffff';
-                    ctx.fillText('START!', centerX, centerY);
+                    ctx.fillText('START!', canvas.width / 2, canvas.height / 2);
                 }
-                ctx.shadowBlur = 0; 
 
                 requestAnimationFrame(countdownLoop);
             }
@@ -166,7 +212,7 @@
             notes = [];
             hitEffects = [];
             fireworks = [];
-            nextSpawnCountdown = 20;
+            nextSpawnCountdown = 10;
 
             timerInterval = setInterval(() => {
                 timeLeft--;
@@ -186,75 +232,73 @@
 
         function updateAudio() {
             if (!analyser) return;
-            dataArray = new Uint8Array(analyser.frequencyBinCount);
             analyser.getByteFrequencyData(dataArray);
             
-            let maxVal = 0;
-            for (let i = 0; i < dataArray.length; i++) {
-                if (dataArray[i] > maxVal) {
-                    maxVal = dataArray[i];
-                }
+            let total = 0;
+            for (let i = 0; i < dataArray.length; i++) total += dataArray[i];
+            let volume = total / dataArray.length;
+
+            const threshold = 14; // 声の感知感度
+
+            if (volume > threshold) {
+                isVoiceDetected = true;
+                micIndicator.className = "active";
+                micIndicator.innerText = "🎤 VOICE ON 🔥";
+            } else {
+                isVoiceDetected = false;
+                micIndicator.className = "";
+                micIndicator.innerText = "🎤 VOICE OFF";
             }
-
-            let currentVolume = maxVal;
-            const threshold = 30; 
-
-            if (inputCooldown > 0) inputCooldown--;
-
-            let volumeSpike = currentVolume - lastVolume;
-
-            if (currentVolume > threshold && volumeSpike > 10 && inputCooldown === 0) {
-                checkJudgment(); 
-                inputCooldown = 10; 
-            }
-
-            lastVolume = currentVolume; 
         }
 
         function updateGame() {
             nextSpawnCountdown--;
             if (nextSpawnCountdown <= 0) {
+                // ランダムなレーン（0, 1, 2）にノーツを生成
                 notes.push({
+                    lane: Math.floor(Math.random() * 3),
                     progress: 0, 
-                    speed: 0.014 + Math.random() * 0.006
+                    speed: 0.015 + Math.random() * 0.007
                 });
-                nextSpawnCountdown = Math.floor(Math.random() * 30) + 25;
+                // 次のノーツが降ってくるまでの間隔
+                nextSpawnCountdown = Math.floor(Math.random() * 20) + 15;
             }
 
             for (let i = notes.length - 1; i >= 0; i--) {
                 notes[i].progress += notes[i].speed;
-                if (notes[i].progress > 1.15) {
+                if (notes[i].progress > 1.12) {
                     notes.splice(i, 1);
-                    combo = 0; 
+                    combo = 0; // 見逃したらコンボリセット
                 }
             }
 
             for (let i = hitEffects.length - 1; i >= 0; i--) {
-                hitEffects[i].alpha -= 0.06;
-                hitEffects[i].radius += 2.5;
+                hitEffects[i].alpha -= 0.07;
+                hitEffects[i].radius += 2.0;
                 if (hitEffects[i].alpha <= 0) hitEffects.splice(i, 1);
             }
 
-            // ⭐ 花火のアップデート処理
             for (let i = fireworks.length - 1; i >= 0; i--) {
                 let fw = fireworks[i];
                 fw.delay--;
                 if (fw.delay <= 0) {
                     fw.state = "explode";
-                    fw.alpha -= 0.016; 
-                    fw.radius += fw.expandSpeed; 
-                    fw.expandSpeed *= 0.94; 
+                    fw.alpha -= 0.02;
+                    if (fw.radius < fw.maxRadius) {
+                        fw.radius += (fw.maxRadius - fw.radius) * 0.1;
+                    }
                 }
                 if (fw.alpha <= 0) fireworks.splice(i, 1);
             }
         }
 
-        function checkJudgment() {
+        function checkJudgment(clickedLane) {
             let targetIndex = -1;
             let maxProgress = -1;
 
+            // 叩かれたレーンの中で、一番判定枠に近い（progressが進んでいる）ノーツを探す
             for(let i=0; i<notes.length; i++) {
-                if(notes[i].progress > maxProgress) {
+                if(notes[i].lane === clickedLane && notes[i].progress > maxProgress) {
                     maxProgress = notes[i].progress;
                     targetIndex = i;
                 }
@@ -264,101 +308,104 @@
             
             let note = notes[targetIndex];
             let diff = Math.abs(note.progress - 1.0);
+            let currentX = laneXs[note.lane];
             let currentY = spawnY + (judgeLowY - spawnY) * note.progress;
+
+            // 【重要ルール】声が出ていない状態でのタップは一律「不発（ミス扱い）」にする
+            if (!isVoiceDetected) {
+                hitEffects.push({
+                    x: currentX, y: currentY, radius: targetRadius * 0.5,
+                    color: "#ff3333", blur: 10, alpha: 0.6, text: "NO VOICE!"
+                });
+                combo = 0;
+                return;
+            }
 
             let hitSuccess = false;
 
-            if (diff < 0.10) {
+            if (diff < 0.09) { // PERFECT判定
                 hitEffects.push({
-                    x: centerX, y: currentY, radius: targetRadius,
-                    color: "#ffffff", blur: 40, alpha: 1.0
+                    x: currentX, y: currentY, radius: targetRadius,
+                    color: "#ffffff", blur: 30, alpha: 1.0, text: "PERFECT!"
                 });
                 score += 150;
                 combo++;
                 hitSuccess = true;
                 notes.splice(targetIndex, 1);
-            } else if (diff < 0.22) {
+            } else if (diff < 0.20) { // GREAT判定
                 hitEffects.push({
-                    x: centerX, y: currentY, radius: targetRadius,
-                    color: "#b0e0ff", blur: 18, alpha: 0.75
+                    x: currentX, y: currentY, radius: targetRadius,
+                    color: "#b0e0ff", blur: 15, alpha: 0.8, text: "GREAT!"
                 });
-                score += 50;
+                score += 70;
                 combo++;
                 hitSuccess = true;
                 notes.splice(targetIndex, 1);
             }
 
-            if (hitSuccess && combo >= 5) {
+            // 5コンボごとに世界樹オーブがピカピカ咲く演出
+            if (hitSuccess && combo > 0 && combo % 5 === 0) {
                 triggerFireworkShow(); 
-                combo = 0; 
             }
         }
 
-        // ⭐ 判定の〇より15%ほど大きく綺麗に広がる花火を生成
         function triggerFireworkShow() {
-            const pastelColors = ["#ffffff", "#ffb7d5", "#b2ebf2", "#fff59d", "#e0ffff", "#e1bee7"];
-            for (let i = 0; i < 5; i++) {
-                // レーンの両脇エリアにバランスよく配置
-                let fireworkX = (Math.random() > 0.5) ? (Math.random() * 80 + 30) : (Math.random() * 80 + 290);
-                let fireworkY = Math.random() * 200 + 110; 
+            const pastelColors = ["#ffb7d5", "#b2ebf2", "#fff59d", "#c8e6c9", "#e1bee7"];
+            for (let i = 0; i < 4; i++) {
+                let fireworkX = Math.random() * (canvas.width - 60) + 30;
+                let fireworkY = Math.random() * 150 + 100; 
 
                 fireworks.push({
                     x: fireworkX,
                     y: fireworkY,
-                    radius: 3,
-                    // ⭐【15%アップのジャスト調整】最大半径を 37 前後に設定
-                    maxRadius: Math.random() * 5 + 35, 
-                    expandSpeed: 2.5 + Math.random() * 1.0, 
+                    radius: 2,
+                    maxRadius: Math.random() * 6 + 5, 
                     color: pastelColors[Math.floor(Math.random() * pastelColors.length)],
                     alpha: 1.0, 
-                    delay: i * 6, // ポポポンとリズムよく咲く
+                    delay: i * 6,
+                    sparkleOffset: Math.random() * 100,
                     state: "wait"
                 });
             }
-            score += 1000; 
+            score += 500; 
         }
 
         function drawGame() {
             ctx.fillStyle = '#020206';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // ⭐ 完璧な発光をキープした花火の描画処理
+            // 世界樹風・発光オーブの描画
+            let now = Date.now();
             fireworks.forEach(fw => {
                 if (fw.state === "explode") {
                     ctx.save();
-                    ctx.globalAlpha = fw.alpha;
-                    
-                    // 1層目：外側のふんわりしたパステルの光の輪
-                    ctx.shadowBlur = fw.radius * 2.2; 
+                    let sparkle = Math.sin((now / 150) + fw.sparkleOffset) * 0.25 + 0.75;
+                    ctx.globalAlpha = fw.alpha * sparkle;
+                    ctx.shadowBlur = fw.radius * 3; 
                     ctx.shadowColor = fw.color;
-                    ctx.strokeStyle = fw.color;
-                    ctx.lineWidth = 4;
-                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius, 0, Math.PI * 2); ctx.stroke();
+                    ctx.fillStyle = fw.color;
+                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius, 0, Math.PI * 2); ctx.fill();
                     
-                    // 2層目：まばゆさを出すための内側の白い輪
-                    ctx.shadowBlur = 15;
-                    ctx.lineWidth = 1.5;
-                    ctx.strokeStyle = "#ffffff"; 
-                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius * 0.9, 0, Math.PI * 2); ctx.stroke();
-                    
-                    // 3層目：中心のきらりと光るコア
+                    ctx.shadowBlur = 0;
                     ctx.fillStyle = "#ffffff";
-                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius * 0.15, 0, Math.PI * 2); ctx.fill();
-                    
+                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius * 0.4, 0, Math.PI * 2); ctx.fill();
                     ctx.restore();
                 }
             });
 
-            ctx.strokeStyle = '#101025';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(centerX, spawnY); ctx.lineTo(centerX, judgeLowY);
-            ctx.stroke();
+            // レーン背後のガイド線と、ターゲット枠〇の描画
+            laneXs.forEach(x => {
+                ctx.strokeStyle = '#121228';
+                ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.moveTo(x, spawnY); ctx.lineTo(x, judgeLowY); ctx.stroke();
 
-            ctx.strokeStyle = 'rgba(0, 150, 255, 0.45)';
-            ctx.lineWidth = 4;
-            ctx.beginPath(); ctx.arc(centerX, judgeLowY, targetRadius, 0, Math.PI * 2); ctx.stroke();
+                // 声のON/OFFで判定枠の色を変化させる（声アリなら明るい水色、声ナシなら暗い青）
+                ctx.strokeStyle = isVoiceDetected ? 'rgba(0, 240, 255, 0.6)' : 'rgba(0, 100, 205, 0.25)';
+                ctx.lineWidth = 4;
+                ctx.beginPath(); ctx.arc(x, judgeLowY, targetRadius, 0, Math.PI * 2); ctx.stroke();
+            });
 
+            // エフェクトの描画
             hitEffects.forEach(fx => {
                 ctx.save();
                 ctx.globalAlpha = fx.alpha;
@@ -366,78 +413,59 @@
                 ctx.shadowColor = fx.color;
                 ctx.fillStyle = fx.color;
                 ctx.beginPath(); ctx.arc(fx.x, fx.y, fx.radius, 0, Math.PI * 2); ctx.fill();
+                
+                // 判定文字（PERFECT! など）の描画
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = fx.color === "#ff3333" ? "#ff8888" : "#ffffff";
+                ctx.font = "bold 13px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText(fx.text, fx.x, fx.y - 45);
                 ctx.restore();
             });
 
+            // ノーツの描画
             notes.forEach(note => {
+                let currentX = laneXs[note.lane];
                 let currentY = spawnY + (judgeLowY - spawnY) * note.progress;
-                let currentRadius = 3 + (15 * note.progress);
+                let currentRadius = 4 + (16 * note.progress);
 
                 ctx.save();
-                ctx.shadowBlur = 12;
+                ctx.shadowBlur = 10;
                 ctx.shadowColor = "#0099ff";
                 
-                let gradient = ctx.createRadialGradient(centerX, currentY, 1, centerX, currentY, currentRadius);
+                let gradient = ctx.createRadialGradient(currentX, currentY, 1, currentX, currentY, currentRadius);
                 gradient.addColorStop(0, '#ffffff');
-                gradient.addColorStop(0.6, '#f5f8ff');
-                gradient.addColorStop(1, "#0088ff");
+                gradient.addColorStop(0.5, '#f0f5ff');
+                gradient.addColorStop(1, "#0077ff");
                 ctx.fillStyle = gradient;
 
-                ctx.beginPath(); ctx.arc(centerX, currentY, currentRadius, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(currentX, currentY, currentRadius, 0, Math.PI * 2); ctx.fill();
                 ctx.restore();
             });
 
-            let gaugeY = centerY - 20;
-            ctx.save();
-            ctx.strokeStyle = "#151525";
-            ctx.lineWidth = 6;
-            ctx.beginPath();
-            ctx.arc(centerX, gaugeY, 22, 0, Math.PI * 2);
-            ctx.stroke();
-
-            if (combo > 0) {
-                ctx.shadowBlur = 12;
-                ctx.shadowColor = "#ffffff"; 
-                ctx.strokeStyle = "#ffffff"; 
-                ctx.lineWidth = 6;
-                let progressAngle = (combo / 5) * Math.PI * 2;
-                ctx.beginPath();
-                ctx.arc(centerX, gaugeY, 22, -Math.PI / 2, (-Math.PI / 2) + progressAngle);
-                ctx.stroke();
-            }
-            ctx.restore();
-
+            // コンボとスコア、残り時間の文字描画
             ctx.fillStyle = '#fff';
             ctx.font = '16px sans-serif';
-            ctx.textAlign = 'left'; ctx.fillText(`SCORE: ${score}`, 20, 40);
-            ctx.textAlign = 'right'; ctx.fillText(`TIME: ${timeLeft}s`, canvas.width - 20, 40);
+            ctx.textAlign = 'left'; ctx.fillText(`SCORE: ${score}`, 20, 35);
+            ctx.textAlign = 'right'; ctx.fillText(`TIME: ${timeLeft}s`, canvas.width - 20, 35);
 
+            if (combo > 0) {
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#00ffff';
+                ctx.font = 'bold 24px sans-serif';
+                ctx.fillText(`${combo}`, canvas.width / 2, spawnY + 40);
+                ctx.font = '11px sans-serif';
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText('COMBO', canvas.width / 2, spawnY + 58);
+                ctx.restore();
+            }
+
+            // タイムアップ画面
             if (isGameOver) {
                 ctx.fillStyle = 'rgba(1, 1, 5, 0.93)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = '#fff';
                 ctx.textAlign = 'center';
                 ctx.font = '24px sans-serif';
-                ctx.fillText('タイムアップ！', centerX, centerY - 30);
-                ctx.fillStyle = '#00ffff';
-                ctx.font = 'bold 26px sans-serif';
-                ctx.fillText(`最終スコア: ${score}`, centerX, centerY + 20);
-            }
-        }
-
-        // 🛑 ゲーム終了処理
-        function endGame() {
-            isGameOver = true;
-            clearInterval(timerInterval);
-            drawGame();
-            
-            if (audioStream) {
-                audioStream.getTracks().forEach(track => track.stop());
-            }
-            if (audioContext) {
-                audioContext.close();
-            }
-        }
-    </script>
-</body>
-</html>
+                ctx.fillText('タイムアップ！', canvas.width / 2, canvas.
