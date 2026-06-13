@@ -3,230 +3,181 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>世界樹の開花 - Healing Tree</title>
+    <title>ボイスインベーダー (マイク切断版)</title>
     <style>
-        body {
-            margin: 0;
-            background-color: #04040a;
-            color: #fff;
-            font-family: 'Helvetica Neue', Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            overflow: hidden;
-            user-select: none;
-        }
-        #info {
-            font-size: 14px;
-            color: #90a4ae;
-            margin-bottom: 12px;
-            text-align: center;
-            padding: 0 20px;
-        }
-        #startBtn {
-            padding: 16px 32px;
-            font-size: 18px;
-            background-color: #e1bee7;
-            color: #212121;
-            border: none;
-            border-radius: 30px;
-            cursor: pointer;
-            font-weight: bold;
-            box-shadow: 0 0 20px rgba(225, 190, 231, 0.4);
-            z-index: 100;
-            margin-bottom: 15px;
-        }
-        .game-container {
-            position: relative;
-            width: 450px;
-            height: 450px;
-            max-width: 90vw;
-            max-height: 60vh;
-            background-color: #020205;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        #treeImg {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            opacity: 0.6; 
-            z-index: 1;
-        }
-        #gameCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 2;
-            pointer-events: none;
-        }
+        body { margin: 0; background-color: #111; color: white; font-family: sans-serif; text-align: center; overflow: hidden; }
+        canvas { background-color: #000; display: block; margin: 10px auto; border: 2px solid #333; max-width: 100%; max-height: 70vh; }
+        #startBtn { padding: 12px 24px; font-size: 18px; font-weight: bold; background-color: #ff4757; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px; }
     </style>
 </head>
 <body>
 
-    <div id="info">穏やかな語りかけや音楽で、大樹の中央に宝石を咲かせましょう（30秒）</div>
-    <button id="startBtn">世界樹の声を聴く</button>
-
-    <div class="game-container">
-        <img id="treeImg" src="https://img1.mitemin.net/cn/c9/5h3rb7a49bj373z8gxyk7s3t40_k6d_vu_yx_5kna.png" alt="世界樹">
-        <canvas id="gameCanvas" width="450" height="450"></canvas>
-    </div>
+    <button id="startBtn">ゲームスタート（マイクを使用します）</button>
+    <canvas id="gameCanvas" width="400" height="500"></canvas>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const startBtn = document.getElementById('startBtn');
 
-        let audioContext, analyser, dataArray, audioStream;
+        let audioContext, analyser, dataArray, audioStream; // ⭐ audioStreamを追加
         let isPlaying = false, isGameOver = false;
-        let timeLeft = 30, timerInterval, bloomProgress = 0, flowers = [];
+        let timeLeft = 30, score = 0, timerInterval;
 
-        function animate() {
-            drawGame();
-            requestAnimationFrame(animate);
-        }
-        animate();
+        let player = { x: 180, y: 440, w: 40, h: 20, speed: 6 };
+        let bullets = [], invaders = [];
+        let moveDirection = 0; 
+
+        // タッチ操作用（左右に動かす）
+        window.addEventListener('touchstart', (e) => {
+            const touchX = e.touches[0].clientX;
+            moveDirection = (touchX < window.innerWidth / 2) ? -1 : 1;
+        });
+        window.addEventListener('touchend', () => { moveDirection = 0; });
 
         startBtn.addEventListener('click', async () => {
             if (isPlaying) return;
-
-            isPlaying = true;
-            isGameOver = false;
-            timeLeft = 30;
-            bloomProgress = 0;
-
-            flowers = [];
-            const totalFlowers = 350; 
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2; 
-
-            for(let i = 0; i < totalFlowers; i++) {
-                let angle = Math.random() * Math.PI * 2; 
-                let dist = Math.pow(Math.random(), 0.8) * 140; 
-                
-                let fx = centerX + Math.cos(angle) * dist;
-                let fy = centerY + Math.sin(angle) * dist;
-
-                const pastelColors = ["#ffb7d5", "#b2ebf2", "#fff59d", "#c8e6c9", "#e1bee7", "#ffcc80"];
-                let required = 0.01 + Math.random() * 0.98;
-
-                flowers.push({
-                    x: fx, y: fy,
-                    color: pastelColors[Math.floor(Math.random() * pastelColors.length)],
-                    maxSize: Math.random() * 3.5 + 2.5,
-                    requiredProgress: required,
-                    sparkleOffset: Math.random() * 100
-                });
-            }
-
-            timerInterval = setInterval(() => {
-                timeLeft--;
-                
-                // 🛡️【ご要望の調整】何もしなくても30秒で30%になるよう、1秒につき「0.01（1%）」自動開花にしました
-                if (bloomProgress < (30 - timeLeft) * 0.01) {
-                    bloomProgress = (30 - timeLeft) * 0.01;
-                }
-
-                if (timeLeft <= 0) endGame();
-            }, 1000);
-
             try {
+                // ⭐ ストリームを記憶
                 audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                
-                if (audioContext.state === 'suspended') {
-                    await audioContext.resume();
-                }
-
                 const source = audioContext.createMediaStreamSource(audioStream);
                 analyser = audioContext.createAnalyser();
-                analyser.fftSize = 256; 
+                analyser.fftSize = 256;
                 source.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
-            } catch (err) {
-                console.log('マイクなしモード');
-            }
+
+                // 初期化
+                isPlaying = true; isGameOver = false; timeLeft = 30; score = 0;
+                bullets = []; invaders = []; player.x = 180;
+                startBtn.style.display = 'none';
+
+                spawnInvaders();
+                timerInterval = setInterval(() => {
+                    timeLeft--;
+                    if (timeLeft <= 0) endGame();
+                }, 1000);
+
+                gameLoop();
+            } catch (err) { alert('マイクの許可が必要です：' + err); }
         });
 
+        function spawnInvaders() {
+            for (let row = 0; row < 3; row++) {
+                for (let col = 0; col < 6; col++) {
+                    invaders.push({ x: col * 55 + 40, y: row * 35 + 60, w: 35, h: 20, alive: true });
+                }
+            }
+        }
+
+        let lastShotTime = 0;
         function updateAudio() {
             if (!analyser) return;
             analyser.getByteFrequencyData(dataArray);
             let total = 0;
             for (let i = 0; i < dataArray.length; i++) total += dataArray[i];
-            let avg = total / dataArray.length;
+            let volume = total / dataArray.length;
 
-            if (avg > 15) {
-                // 声をかけているときは、少し多めにお花が咲き進みます
-                bloomProgress += 0.0015; 
-                if (bloomProgress > 1.1) bloomProgress = 1.1; 
+            // 声の大きさが基準を超えたら弾を発射（連射制限：0.15秒）
+            let now = Date.now();
+            if (volume > 35 && now - lastShotTime > 150) {
+                bullets.push({ x: player.x + player.w / 2 - 3, y: player.y, w: 6, h: 12, speed: 7 });
+                lastShotTime = now;
             }
+        }
+
+        function gameLoop() {
+            if (!isPlaying) return;
+            updateAudio();
+            updateGame();
+            drawGame();
+            if (!isGameOver) requestAnimationFrame(gameLoop);
+        }
+
+        function updateGame() {
+            player.x += moveDirection * player.speed;
+            if (player.x < 0) player.x = 0;
+            if (player.x > canvas.width - player.w) player.x = canvas.width - player.w;
+
+            bullets.forEach((b, bi) => {
+                b.y -= b.speed;
+                if (b.y < 0) bullets.splice(bi, 1);
+            });
+
+            let allDead = true;
+            invaders.forEach(inv => {
+                if (!inv.alive) return;
+                allDead = false;
+                
+                // インベーダーがじわじわ迫る
+                inv.y += 0.2;
+                if (inv.y + inv.h >= player.y) isGameOver = true;
+
+                // 弾との当たり判定
+                bullets.forEach((b, bi) => {
+                    if (b.x < inv.x + inv.w && b.x + b.w > inv.x && b.y < inv.y + inv.h && b.y + b.h > inv.y) {
+                        inv.alive = false;
+                        bullets.splice(bi, 1);
+                        score += 10;
+                    }
+                });
+            });
+
+            if (allDead) spawnInvaders(); // 全滅したら次ウエーブ
+            if (isGameOver) endGame();
         }
 
         function drawGame() {
-            if (isPlaying) {
-                updateAudio();
-            }
-
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            if (isPlaying) {
-                let now = Date.now();
-                flowers.forEach(f => {
-                    if (bloomProgress >= f.requiredProgress) {
-                        ctx.save();
-                        let sparkle = Math.sin((now / 200) + f.sparkleOffset) * 0.25 + 0.75;
-                        ctx.globalAlpha = sparkle;
-                        
-                        let timeSinceBloom = bloomProgress - f.requiredProgress;
-                        let sizeGrowth = Math.min(1.0, timeSinceBloom * 4 + 0.15); 
-                        let currentSize = f.maxSize * sizeGrowth;
+            // プレイヤー
+            ctx.fillStyle = '#00ffcc';
+            ctx.fillRect(player.x, player.y, player.w, player.h);
 
-                        ctx.shadowBlur = currentSize * 2.2;
-                        ctx.shadowColor = f.color;
-                        ctx.fillStyle = f.color;
-                        ctx.beginPath(); ctx.arc(f.x, f.y, currentSize, 0, Math.PI * 2); ctx.fill();
+            // 弾
+            ctx.fillStyle = '#ffff00';
+            bullets.forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
 
-                        ctx.shadowBlur = 0;
-                        ctx.fillStyle = "#ffffff";
-                        ctx.beginPath(); ctx.arc(f.x, f.y, currentSize * 0.35, 0, Math.PI * 2); ctx.fill();
-                        ctx.restore();
-                    }
-                });
+            // インベーダー
+            ctx.fillStyle = '#ff4757';
+            invaders.forEach(inv => {
+                if (inv.alive) ctx.fillRect(inv.x, inv.y, inv.w, inv.h);
+            });
 
-                let displayPercent = Math.min(100, Math.floor(bloomProgress * 100));
-                ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = '16px sans-serif'; ctx.textAlign = 'left';
-                ctx.fillText(`世界樹の開花度: ${displayPercent}%`, 20, 35);
-                ctx.textAlign = 'right'; ctx.fillText(`TIME: ${timeLeft}s`, canvas.width - 20, 35);
+            // UI
+            ctx.fillStyle = 'white'; ctx.font = '16px sans-serif'; ctx.textAlign = 'left';
+            ctx.fillText(`SCORE: ${score}`, 20, 35);
+            ctx.textAlign = 'right';
+            ctx.fillText(`TIME: ${timeLeft}s`, canvas.width - 20, 35);
 
-                if (isGameOver) {
-                    ctx.fillStyle = 'rgba(2, 2, 6, 0.95)'; 
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '20px sans-serif';
-                    ctx.fillText('時の砂が尽きました', canvas.width / 2, canvas.height / 2 - 25);
-                    ctx.fillStyle = '#e1bee7'; ctx.font = 'bold 24px sans-serif';
-                    ctx.fillText(`最終開花度: ${displayPercent}%`, canvas.width / 2, canvas.height / 2 + 25);
-                }
+            if (isGameOver) {
+                ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ff4757'; ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText(timeLeft <= 0 ? 'TIME UP!' : 'GAME OVER', canvas.width / 2, canvas.height / 2);
+                ctx.fillStyle = 'white'; ctx.font = '20px sans-serif';
+                ctx.fillText(`FINAL SCORE: ${score}`, canvas.width / 2, canvas.height / 2 + 40);
             }
         }
 
+        // 🛑【マイク切断】ゲーム終了処理
         function endGame() {
             isGameOver = true;
             clearInterval(timerInterval);
-            
-            if (audioStream) audioStream.getTracks().forEach(t => t.stop());
-            if (audioContext) audioContext.close();
-            
+
+            // ⭐ マイクストリームを完全に停止
+            if (audioStream) {
+                audioStream.getTracks().forEach(track => track.stop());
+            }
+            if (audioContext) {
+                audioContext.close();
+            }
+
+            drawGame();
             setTimeout(() => {
+                startBtn.textContent = 'もう一度あそぶ';
+                startBtn.style.display = 'block';
                 isPlaying = false;
-            }, 2500);
+            }, 2000);
         }
     </script>
 </body>
