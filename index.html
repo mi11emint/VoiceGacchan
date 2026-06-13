@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音声インベーダー テスト</title>
+    <title>音声インベーダーゲーム！</title>
     <style>
         body {
             margin: 0;
@@ -24,12 +24,13 @@
             max-height: 70vh;
         }
         button {
-            padding: 10px 20px;
-            font-size: 16px;
+            padding: 12px 24px;
+            font-size: 18px;
             background-color: #0fa;
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            font-weight: bold;
             margin-bottom: 10px;
         }
         #info {
@@ -41,8 +42,8 @@
 </head>
 <body>
 
-    <div id="info">マイクを許可して、声を出してみてね！</div>
-    <button id="startBtn">マイクを起動してスタート</button>
+    <div id="info">【声で撃て！】短い声＝通常弾 / 長い声＝ビーム</div>
+    <button id="startBtn">ゲームスタート</button>
     <canvas id="gameCanvas" width="400" height="500"></canvas>
 
     <script>
@@ -54,144 +55,257 @@
         let analyser;
         let dataArray;
         let isPlaying = false;
+        let isGameOver = false;
 
-        // ゲームオブジェクトの管理
+        // ゲーム状態
+        let score = 0;
+        let timeLeft = 30; // 30秒の制限時間（仮のダウンロード時間）
+        let timerInterval;
+
+        // オブジェクト管理
         let bullets = [];
-        let player = { x: canvas.width / 2, y: canvas.height - 30 };
+        let invaders = [];
+        let player = { x: canvas.width / 2, y: canvas.height - 40 };
 
-        // 音声検知用の変数
-        let voiceDuration = 0; // 音が続いている時間カウント
+        // 音声用
+        let voiceDuration = 0;
         let isBeaming = false;
+        let invaderSpawnTimer = 0;
 
-        // スタートボタンを押した時の処理
         startBtn.addEventListener('click', async () => {
             if (isPlaying) return;
-            
             try {
-                // マイクアクセスの許可を取得
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                
-                // Web Audio API の設定
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioContext.createMediaStreamSource(stream);
                 analyser = audioContext.createAnalyser();
-                analyser.fftSize = 256; // 音量の解析度
+                analyser.fftSize = 256;
                 source.connect(analyser);
-                
-                const bufferLength = analyser.frequencyBinCount;
-                dataArray = new Uint8Array(bufferLength);
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
 
                 isPlaying = true;
-                startBtn.style.display = 'none'; // ボタンを隠す
-                
-                // ゲームループ開始
+                isGameOver = false;
+                score = 0;
+                timeLeft = 30;
+                bullets = [];
+                invaders = [];
+                startBtn.style.display = 'none';
+
+                // カウントダウンタイマー開始
+                timerInterval = setInterval(() => {
+                    timeLeft--;
+                    if (timeLeft <= 0) {
+                        endGame();
+                    }
+                }, 1000);
+
                 gameLoop();
             } catch (err) {
                 alert('マイクの許可が必要です：' + err);
             }
         });
 
-        // メインのゲームループ（1秒間に約60回実行される）
         function gameLoop() {
             if (!isPlaying) return;
 
-            updateAudio(); // 音声の解析
-            updateGame();  // ゲーム状態の更新（弾の移動など）
-            drawGame();    // 画面の描画
+            updateAudio();
+            updateGame();
+            checkCollisions(); // 当たり判定の追加
+            drawGame();
 
-            requestAnimationFrame(gameLoop);
+            if (!isGameOver) {
+                requestAnimationFrame(gameLoop);
+            }
         }
 
-        // 音声を解析して弾を発射する処理
         function updateAudio() {
             analyser.getByteFrequencyData(dataArray);
-            
-            // 音量の平均値を計算
             let total = 0;
-            for (let i = 0; i < dataArray.length; i++) {
-                total += dataArray[i];
-            }
-            let volume = total / dataArray.length; // 0 〜 255 の値
+            for (let i = 0; i < dataArray.length; i++) total += dataArray[i];
+            let volume = total / dataArray.length;
 
-            // しきい値（これ以上の音量で反応する）
-            const threshold = 35; 
+            const threshold = 35; // 声の感度設定
 
             if (volume > threshold) {
-                voiceDuration++; // 音が続いている時間を増やす
+                voiceDuration++;
+                if (voiceDuration > 15) isBeaming = true;
 
-                // 20フレーム（約0.3秒）以上音が続いたらビームモードに移行
-                if (voiceDuration > 20) {
-                    isBeaming = true;
-                }
-
-                // 弾・ビームの生成/更新
                 if (isBeaming) {
-                    // ビームの場合は、最新の弾を縦に伸ばす、または新しく太いビームを出す
-                    // ここでは簡易的に、常に上向きに伸びるビームを生成
+                    // ビーム発射
                     bullets.push({
                         x: player.x,
                         y: player.y - 10,
-                        width: Math.min(volume * 0.4, 40), // 音量で太さが変わる
-                        height: 30,
+                        width: Math.min(volume * 0.4, 35),
+                        height: 25,
                         speed: 12,
-                        color: '#f0f' // ビームはピンク
+                        color: '#f0f',
+                        isBeam: true
                     });
                 } else {
-                    // 通常の弾（単発）は、音量に応じた大きさ（半径）にする
-                    // 連射しすぎないように5フレームに1発制限
+                    // 通常弾発射（5フレームに1発）
                     if (voiceDuration % 5 === 1) {
                         bullets.push({
                             x: player.x,
                             y: player.y - 10,
-                            radius: Math.min(volume * 0.3, 30), // 音量でサイズが変わる
+                            radius: Math.min(volume * 0.3, 25),
                             speed: 7,
-                            color: '#0fa', // 通常弾は緑
+                            color: '#0fa',
                             isBeam: false
                         });
                     }
                 }
             } else {
-                // 音が途切れたらリセット
                 voiceDuration = 0;
                 isBeaming = false;
             }
         }
 
-        // 弾の移動処理
         function updateGame() {
+            // 弾の移動
             for (let i = bullets.length - 1; i >= 0; i--) {
                 bullets[i].y -= bullets[i].speed;
-                
-                // 画面外に出た弾を削除
-                if (bullets[i].y < -50) {
-                    bullets.splice(i, 1);
+                if (bullets[i].y < -50) bullets.splice(i, 1);
+            }
+
+            // インベーダーの自動生成（約1秒に1回）
+            invaderSpawnTimer++;
+            if (invaderSpawnTimer > 50) {
+                invaders.push({
+                    x: Math.random() * (canvas.width - 40) + 20,
+                    y: -20,
+                    size: 25,
+                    speed: 1.5 + Math.random() * 1.5 // 速度はランダム
+                });
+                invaderSpawnTimer = 0;
+            }
+
+            // インベーダーの移動
+            for (let i = invaders.length - 1; i >= 0; i--) {
+                invaders[i].y += invaders[i].speed;
+
+                // 一番下まで攻め込まれたらゲームオーバー
+                if (invaders[i].y > canvas.height - 60) {
+                    endGame();
                 }
             }
         }
 
-        // 画面の描画
+        // 💥 当たり判定の処理
+        function checkCollisions() {
+            for (let b = bullets.length - 1; b >= 0; b--) {
+                for (let i = invaders.length - 1; i >= 0; i--) {
+                    let bullet = bullets[b];
+                    let invader = invaders[i];
+
+                    if (!bullet || !invader) continue;
+
+                    let hit = false;
+
+                    if (bullet.isBeam) {
+                        // 四角形（ビーム）と円（インベーダー）の当たり判定
+                        let closeX = Math.max(bullet.x - bullet.width/2, Math.min(invader.x, bullet.x + bullet.width/2));
+                        let closeY = Math.max(bullet.y, Math.min(invader.y, bullet.y + bullet.height));
+                        let distanceX = invader.x - closeX;
+                        let distanceY = invader.y - closeY;
+                        let distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
+                        if (distanceSquared < (invader.size * invader.size)) {
+                            hit = true;
+                        }
+                    } else {
+                        // 円（通常弾）と円（インベーダー）の当たり判定
+                        let dx = bullet.x - invader.x;
+                        let dy = bullet.y - invader.y;
+                        let distance = Math.sqrt(dx * dx + dy * dy);
+                        if (distance < bullet.radius + invader.size) {
+                            hit = true;
+                        }
+                    }
+
+                    if (hit) {
+                        invaders.splice(i, 1); // インベーダー消滅
+                        score += 100; // スコア加算
+                        
+                        // 通常弾の場合は弾も消す（ビームは貫通する）
+                        if (!bullet.isBeam) {
+                            bullets.splice(b, 1);
+                            break; 
+                        }
+                    }
+                }
+            }
+        }
+
         function drawGame() {
-            // 画面をクリア
+            // 背景クリア
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // プレイヤー（自機）を描画
+            // プレイヤー（自機）
             ctx.fillStyle = '#fff';
-            ctx.fillRect(player.x - 15, player.y, 30, 15);
+            ctx.fillRect(player.x - 20, player.y, 40, 15);
+            ctx.fillRect(player.x - 5, player.y - 8, 10, 8); // 砲台っぽく
 
-            // 弾を描画
+            // 弾の描画
             bullets.forEach(bullet => {
                 ctx.fillStyle = bullet.color;
-                if (bullet.radius !== undefined) {
-                    // 通常の丸い弾
+                if (!bullet.isBeam) {
                     ctx.beginPath();
                     ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
                     ctx.fill();
                 } else {
-                    // ビーム（四角形）
                     ctx.fillRect(bullet.x - bullet.width / 2, bullet.y, bullet.width, bullet.height);
                 }
             });
+
+            // インベーダー（👾）の描画
+            invaders.forEach(invader => {
+                ctx.fillStyle = '#ff3333'; // 赤いインベーダー
+                // 簡易的に文字で「👾」を描画（画像がなくても寂しくないように）
+                ctx.font = `${invader.size * 1.2}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('👾', invader.x, invader.y);
+            });
+
+            // UI（スコアと残り時間）の描画
+            ctx.fillStyle = '#fff';
+            ctx.font = '16px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(`SCORE: ${score}`, 15, 30);
+            ctx.textAlign = 'right';
+            ctx.fillText(`TIME: ${timeLeft}s`, canvas.width - 15, 30);
+
+            // リザルト画面
+            if (isGameOver) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#fff';
+                ctx.textAlign = 'center';
+                ctx.font = '28px sans-serif';
+                ctx.fillText('保存が完了しました！', canvas.width / 2, canvas.height / 2 - 40);
+                
+                ctx.fillStyle = '#0fa';
+                ctx.font = '22px sans-serif';
+                ctx.fillText(`あなたのスコア: ${score}`, canvas.width / 2, canvas.height / 2 + 10);
+
+                ctx.fillStyle = '#aaa';
+                ctx.font = '14px sans-serif';
+                ctx.fillText('画面を閉じて動画を確認してください。', canvas.width / 2, canvas.height / 2 + 60);
+            }
+        }
+
+        function endGame() {
+            isGameOver = true;
+            clearInterval(timerInterval);
+            drawGame(); // 最終画面を描画
+            
+            // 2秒後にスタートボタンを再表示（もう一度遊べるように）
+            setTimeout(() => {
+                startBtn.textContent = 'もう一度遊ぶ';
+                startBtn.style.display = 'block';
+                isPlaying = false;
+            }, 2000);
         }
     </script>
 </body>
