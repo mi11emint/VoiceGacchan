@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音響ヒーリングゲーム：世界樹の開花 (枝振り強化版)</title>
+    <title>音響ヒーリングゲーム：世界樹の開花 (大樹版)</title>
     <style>
         body {
             margin: 0;
@@ -53,7 +53,7 @@
 </head>
 <body>
 
-    <div id="info">穏やかな語りかけや静かな音楽で、世界樹に宝石の花を咲かせましょう（30秒）</div>
+    <div id="info">穏やかな語りかけや静かな音楽で、大樹に宝石の花を咲かせましょう（30秒）</div>
     <button id="startBtn">世界樹の声を聴く</button>
     <canvas id="gameCanvas" width="500" height="500"></canvas>
 
@@ -71,12 +71,9 @@
         let timeLeft = 30;
         let timerInterval;
         
-        // 開花コントロール
-        let bloomProgress = 0; // 0.0 〜 1.0 (1.0で20秒時点の満開)
-        let maxBloomProgress = 1.5; 
+        let bloomProgress = 0; // 0.0 〜 1.0 (1.0で満開)
+        let maxBloomProgress = 1.3; 
         let flowers = [];
-        
-        // 世界樹の骨組み
         let treeBranches = [];
 
         startBtn.addEventListener('click', async () => {
@@ -96,13 +93,13 @@
                 timeLeft = 30;
                 bloomProgress = 0;
                 flowers = [];
+                treeBranches = [];
                 startBtn.style.display = 'none';
 
-                // 世界樹の枝の生成（開始時の幹の長さや深さを調整）
-                treeBranches = [];
-                generateTree(canvas.width / 2, canvas.height - 40, -Math.PI / 2, 85, 9);
+                // ⭐【大樹化】根元（幹）をぐっと低くし、そこから横へ大爆発させるための初期設定
+                // 幹の長さを少し短め(65)にし、depthを10に増やしてより緻密に
+                generateTree(canvas.width / 2, canvas.height - 35, -Math.PI / 2, 65, 10);
 
-                // タイマー
                 timerInterval = setInterval(() => {
                     timeLeft--;
                     if (timeLeft <= 0) endGame();
@@ -114,52 +111,57 @@
             }
         });
 
-        // ⭐【修正】添付画像のような全体的に丸い、横にも広がる枝振りを生成するアルゴリズム
+        // ⭐【修正】横へ丸く広がるどっしりとした大樹を作るフラクタル
         function generateTree(x, y, angle, length, depth) {
             if (depth === 0) return;
 
-            // 添付画像のように、幹に近い方が太く、先に行くほど細くなるように、各段階で長さを調整
-            // depthが深い（幹に近い）ときは長く、浅いときは短く
-            let adjustedLength = length * (0.6 + depth * 0.1); 
-
-            let x2 = x + Math.cos(angle) * adjustedLength;
-            let y2 = y + Math.sin(angle) * adjustedLength;
+            // 根元に近い枝ほど長く、横に伸びるように調整
+            let x2 = x + Math.cos(angle) * length;
+            let y2 = y + Math.sin(angle) * length;
 
             treeBranches.push({ x1: x, y1: y, x2: x2, y2: y2, depth: depth });
 
-            // 枝の密度を上げるため、花の候補地も少し増やす
-            if (depth <= 7) { 
-                let flowerCount = Math.floor((8 - depth) * 2.5); // 密度アップ
+            // 先端の細い小枝（depthが5以下）にバランスよく花を散りばめる
+            if (depth <= 5) { 
+                let flowerCount = Math.floor((6 - depth) * 2); 
                 for(let i=0; i<flowerCount; i++) {
                     let t = Math.random(); 
                     let fx = x + (x2 - x) * t;
                     let fy = y + (y2 - y) * t;
                     
                     const pastelColors = ["#ffb7d5", "#b2ebf2", "#fff59d", "#c8e6c9", "#e1bee7", "#ffcc80"];
+                    
+                    // ⭐【バグ修正】requiredProgressが0付近に偏らないよう、0.02〜0.98の間に完全分散
+                    // これにより、10%のときは本当に10%の花しか咲かなくなります！
+                    let required = 0.02 + Math.random() * 0.96;
+
                     flowers.push({
                         x: fx,
                         y: fy,
                         color: pastelColors[Math.floor(Math.random() * pastelColors.length)],
-                        size: Math.random() * 4 + 4, // サイズを少し小さめにして密度感
-                        requiredProgress: Math.random() * 1.0, 
+                        size: Math.random() * 3.5 + 3.5, // 密集したとき綺麗なようにほんの少し小ぶりに
+                        requiredProgress: required, 
                         sparkleOffset: Math.random() * 100
                     });
                 }
             }
 
-            // ⭐ 分岐角度と長さを調整して、全体的に大きな「丸い形」になるように
-            let numBranches = 2; // 基本は2本に分岐
+            // 分岐の計算
+            let numBranches = 2;
+            // 最初の2〜3段階（主幹から太い大枝に別れる時）は、添付画像のように横に広く広げる
+            let isMainBranch = (depth >= 8);
 
             for (let i = 0; i < numBranches; i++) {
-                // 角度を広く取ることで、横への広がりを表現
-                // 特に幹に近いところでは広い角度で分岐
-                let angleSpread = (depth > 6) ? 0.9 : 0.6; // 角度の広がり
+                // 主幹に近い時はあえて「左右に大きく（最大65度近辺）」広げることで横長の大樹にする
+                let angleSpread = isMainBranch ? 0.95 : 0.55; 
                 let angleShift = (i === 0) ? -angleSpread : angleSpread;
-                let newAngle = angle + angleShift * (Math.random() * 0.5 + 0.5);
-
-                // 先に行くほど枝が短くなるように縮小率を調整
-                let shrinkFactor = (depth > 6) ? 0.8 : 0.75;
-                let newLength = length * shrinkFactor * (0.8 + Math.random() * 0.4);
+                
+                // ほんの少しランダムな揺らぎを混ぜて自然な枝振りに
+                let newAngle = angle + angleShift + (Math.random() * 0.2 - 0.1);
+                
+                // 上に伸びる枝よりも、横に広がる枝の長さを維持する縮小率
+                let shrinkFactor = isMainBranch ? 0.82 : 0.76;
+                let newLength = length * shrinkFactor * (0.85 + Math.random() * 0.3);
 
                 generateTree(x2, y2, newAngle, newLength, depth - 1);
             }
@@ -183,7 +185,8 @@
             let avgVolume = totalVolume / dataArray.length;
 
             if (avgVolume > 15) {
-                bloomProgress += 0.001; // 少しだけ咲くペースを早く調整
+                // 20秒で100%(1.0)に到達するなだらかなスピード
+                bloomProgress += 0.00085; 
                 if (bloomProgress > maxBloomProgress) bloomProgress = maxBloomProgress;
             }
         }
@@ -192,12 +195,16 @@
             ctx.fillStyle = '#030308';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // ⭐ 世界樹の幹と枝を描画（シックなグレー。幹をより太く）
+            // 1. 世界樹の大樹としての幹と枝を描画（どっしりグレー）
             treeBranches.forEach(b => {
                 ctx.save();
-                ctx.strokeStyle = `rgba(120, 128, 140, ${0.2 + (b.depth * 0.08)})`;
-                // 添付画像の太い幹を表現するため、depthによる太さの倍率をアップ
-                ctx.lineWidth = b.depth * (b.depth > 7 ? 1.5 : 1.1); 
+                ctx.strokeStyle = `rgba(130, 138, 150, ${0.15 + (b.depth * 0.08)})`;
+                
+                // ⭐【大樹化】根元の幹（depth=10, 9など）が圧倒的に太くなるように調整
+                let thicknessMultiplier = 1.3;
+                if(b.depth >= 8) thicknessMultiplier = 2.4; // 根元を劇的に太く
+                ctx.lineWidth = b.depth * thicknessMultiplier; 
+                
                 ctx.lineCap = 'round';
                 ctx.beginPath();
                 ctx.moveTo(b.x1, b.y1);
@@ -206,7 +213,7 @@
                 ctx.restore();
             });
 
-            // 花の描画
+            // 2. 宝石の花を描画（開花パーセントと完全同期）
             let now = Date.now();
             flowers.forEach(f => {
                 if (bloomProgress >= f.requiredProgress) {
@@ -214,19 +221,24 @@
                     
                     let sparkle = Math.sin((now / 200) + f.sparkleOffset) * 0.25 + 0.75;
                     ctx.globalAlpha = sparkle;
-                    ctx.shadowBlur = 15;
+                    ctx.shadowBlur = 14;
                     ctx.shadowColor = f.color;
                     
                     ctx.fillStyle = f.color;
                     ctx.beginPath();
-                    let currentSize = f.size * Math.min(1.5, (bloomProgress - f.requiredProgress) * 4 + 0.5);
+                    
+                    // 咲き始めの花は小さく、満開に近づくほどふっくら開く演出
+                    let growth = Math.min(1.3, (bloomProgress - f.requiredProgress) * 5 + 0.3);
+                    let currentSize = f.size * growth;
+                    
                     ctx.arc(f.x, f.y, currentSize, 0, Math.PI * 2);
                     ctx.fill();
 
+                    // 白い宝石の芯
                     ctx.shadowBlur = 0;
                     ctx.fillStyle = "#ffffff";
                     ctx.beginPath();
-                    ctx.arc(f.x, f.y, currentSize * 0.4, 0, Math.PI * 2);
+                    ctx.arc(f.x, f.y, currentSize * 0.35, 0, Math.PI * 2);
                     ctx.fill();
 
                     ctx.restore();
@@ -246,7 +258,7 @@
             // インジケーター
             ctx.fillStyle = 'rgba(144, 164, 174, 0.15)';
             ctx.textAlign = 'center';
-            if (bloomProgress < maxBloomProgress && !isGameOver) {
+            if (bloomProgress < 1.0 && !isGameOver) {
                 ctx.fillText(".. 穏やかな声を感知中 ..", canvas.width/2, canvas.height - 15);
             }
 
