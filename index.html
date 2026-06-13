@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音声インベーダー（ボス確実出現版）</title>
+    <title>音声インベーダー（ボスHP1000・真の最終決戦版）</title>
     <style>
         body {
             margin: 0;
@@ -67,7 +67,7 @@
 </head>
 <body>
 
-    <div id="info">【今度こそ降臨】後半15秒で巨大ボス出現！ビームでHPを削れ！🎤👑</div>
+    <div id="info">【耐久力1000】巨大ボス降臨！全力のロングビームで削りきれ！🔥</div>
     <button id="startBtn">ゲームスタート</button>
     <canvas id="gameCanvas" width="400" height="500"></canvas>
 
@@ -104,7 +104,7 @@
         let voiceDuration = 0;
         let isBeaming = false;
         let invaderSpawnTimer = 0;
-        let hasBossSpawned = false; // ボス出現フラグ
+        let hasBossSpawned = false;
 
         const setBtnEvent = (btn, startFlag, endFlag) => {
             btn.addEventListener('mousedown', () => { if(isPlaying) startFlag() });
@@ -224,10 +224,7 @@
                 if (bullets[i].y < -50) bullets.splice(i, 1);
             }
 
-            // --- インベーダー＆ボス出現ロジック ---
             invaderSpawnTimer++;
-            
-            // 残り15秒以下なら、2フレームに1回という超高速で雑魚を湧かせる
             const spawnInterval = (timeLeft <= 15) ? 2 : 12;
 
             if (invaderSpawnTimer > spawnInterval) {
@@ -240,28 +237,26 @@
                 invaderSpawnTimer = 0;
             }
 
-            // ⭐【修正：ボス出現判定を強化】残り15秒以下で、まだ1回もボスが出ていなければ確実に生成
+            // ⭐【ボス出現判定】残り15秒以下で、耐久力を「1000」に超絶強化！
             if (timeLeft <= 15 && !hasBossSpawned) {
                 boss = {
                     x: canvas.width / 2,
                     y: -50,
-                    size: 80, // 圧倒的デカさ
-                    speed: 0.6,
-                    hp: 20, // 耐久力
-                    maxHp: 20
+                    size: 85, 
+                    speed: 0.4, // よりじわじわと威圧感を出して降りてくる
+                    hp: 1000,   // 耐久力1000！
+                    maxHp: 1000
                 };
-                hasBossSpawned = true; // 出現済みにする
+                hasBossSpawned = true;
             }
 
-            // ボスの移動
             if (boss) {
                 boss.y += boss.speed;
                 if (boss.y > canvas.height + 50) {
-                    boss.y = -50; // 下まで行ったら上からループ
+                    boss.y = -50; 
                 }
             }
 
-            // 雑魚インベーダーの移動
             for (let i = invaders.length - 1; i >= 0; i--) {
                 invaders[i].y += invaders[i].speed;
                 if (invaders[i].y > canvas.height + 20) {
@@ -282,18 +277,18 @@
                     let dy = bullet.y - boss.y;
                     let distance = Math.sqrt(dx * dx + dy * dy);
 
-                    // ボスの丸い体に当たったかの判定
-                    if (distance < (bullet.radius || bullet.width/2) + boss.size/3) {
+                    if (distance < (bullet.radius || bullet.width/2) + boss.size/2.5) {
                         hitBoss = true;
                     }
 
                     if (hitBoss) {
-                        boss.hp--; 
-                        score += 10; 
+                        // ビームなら多段ヒットするのでゴリゴリ削れる、通常弾なら1ずつ削る
+                        boss.hp -= bullet.isBeam ? 3 : 1; 
+                        score += 20; // 攻撃を当てるたびに加点
 
                         if (boss.hp <= 0) {
-                            boss = null; // ボス撃破！
-                            score += 5000; // 超ボーナス
+                            boss = null; 
+                            score += 10000; // HP1000撃破は超大ボーナス1万点！
                         }
 
                         if (!bullet.isBeam) {
@@ -361,13 +356,13 @@
                 ctx.textBaseline = 'middle';
                 ctx.fillText('👑👾', boss.x, boss.y); 
 
-                // ボスのHPバー
-                let barWidth = 70;
-                let barHeight = 8;
-                ctx.fillStyle = '#ff3333';
-                ctx.fillRect(boss.x - barWidth/2, boss.y - boss.size/2, barWidth, barHeight);
+                // ボスのHPバー（少し太く大きくしました）
+                let barWidth = 100;
+                let barHeight = 10;
+                ctx.fillStyle = '#444';
+                ctx.fillRect(boss.x - barWidth/2, boss.y - boss.size/2 - 5, barWidth, barHeight);
                 ctx.fillStyle = '#0fa';
-                ctx.fillRect(boss.x - barWidth/2, boss.y - boss.size/2, barWidth * (boss.hp / boss.maxHp), barHeight);
+                ctx.fillRect(boss.x - barWidth/2, boss.y - boss.size/2 - 5, barWidth * (Math.max(0, boss.hp) / boss.maxHp), barHeight);
             }
 
             // 雑魚インベーダー
