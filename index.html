@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音声インベーダー（ボスHP1000・真の最終決戦版）</title>
+    <title>音声インベーダー（メリハリ＆ボス見た目修正版）</title>
     <style>
         body {
             margin: 0;
@@ -67,7 +67,7 @@
 </head>
 <body>
 
-    <div id="info">【耐久力1000】巨大ボス降臨！全力のロングビームで削りきれ！🔥</div>
+    <div id="info">【最初10秒は半分】後半15秒で巨大ボス出現！ビームでHPを削れ！🔥</div>
     <button id="startBtn">ゲームスタート</button>
     <canvas id="gameCanvas" width="400" height="500"></canvas>
 
@@ -224,8 +224,16 @@
                 if (bullets[i].y < -50) bullets.splice(i, 1);
             }
 
+            // --- インベーダー出現ロジック ---
             invaderSpawnTimer++;
-            const spawnInterval = (timeLeft <= 15) ? 2 : 12;
+            
+            // ⭐【修正】出現スピードの調整
+            let spawnInterval = 12; // 通常時（中盤 20秒〜16秒）
+            if (timeLeft > 20) {
+                spawnInterval = 24; // 最初の10秒間は出現頻度をこれまでの半分に！
+            } else if (timeLeft <= 15) {
+                spawnInterval = 2;  // ラスト15秒は怒涛の超高速！
+            }
 
             if (invaderSpawnTimer > spawnInterval) {
                 invaders.push({
@@ -237,14 +245,14 @@
                 invaderSpawnTimer = 0;
             }
 
-            // ⭐【ボス出現判定】残り15秒以下で、耐久力を「1000」に超絶強化！
+            // ボス出現判定（耐久力1000）
             if (timeLeft <= 15 && !hasBossSpawned) {
                 boss = {
                     x: canvas.width / 2,
                     y: -50,
                     size: 85, 
-                    speed: 0.4, // よりじわじわと威圧感を出して降りてくる
-                    hp: 1000,   // 耐久力1000！
+                    speed: 0.4, 
+                    hp: 1000,   
                     maxHp: 1000
                 };
                 hasBossSpawned = true;
@@ -282,13 +290,12 @@
                     }
 
                     if (hitBoss) {
-                        // ビームなら多段ヒットするのでゴリゴリ削れる、通常弾なら1ずつ削る
                         boss.hp -= bullet.isBeam ? 3 : 1; 
-                        score += 20; // 攻撃を当てるたびに加点
+                        score += 20; 
 
                         if (boss.hp <= 0) {
                             boss = null; 
-                            score += 10000; // HP1000撃破は超大ボーナス1万点！
+                            score += 10000; 
                         }
 
                         if (!bullet.isBeam) {
@@ -349,20 +356,26 @@
                 }
             });
 
-            // ボスの描画
+            // ⭐【修正】ボスの描画（王冠👑とインベーダー👾を上下に重ねて描画）
             if (boss) {
-                ctx.font = `${boss.size}px sans-serif`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText('👑👾', boss.x, boss.y); 
 
-                // ボスのHPバー（少し太く大きくしました）
+                // 上に小さな王冠をちょこんと乗せる
+                ctx.font = `${boss.size * 0.5}px sans-serif`;
+                ctx.fillText('👑', boss.x, boss.y - boss.size * 0.45); 
+
+                // 下に巨大なインベーダー
+                ctx.font = `${boss.size}px sans-serif`;
+                ctx.fillText('👾', boss.x, boss.y); 
+
+                // ボスのHPバー
                 let barWidth = 100;
                 let barHeight = 10;
                 ctx.fillStyle = '#444';
-                ctx.fillRect(boss.x - barWidth/2, boss.y - boss.size/2 - 5, barWidth, barHeight);
+                ctx.fillRect(boss.x - barWidth/2, boss.y - boss.size/2 - 25, barWidth, barHeight);
                 ctx.fillStyle = '#0fa';
-                ctx.fillRect(boss.x - barWidth/2, boss.y - boss.size/2 - 5, barWidth * (Math.max(0, boss.hp) / boss.maxHp), barHeight);
+                ctx.fillRect(boss.x - barWidth/2, boss.y - boss.size/2 - 25, barWidth * (Math.max(0, boss.hp) / boss.maxHp), barHeight);
             }
 
             // 雑魚インベーダー
