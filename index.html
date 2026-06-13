@@ -22,7 +22,7 @@
             max-width: 100%;
             max-height: 70vh;
             border-radius: 8px;
-            display: block; /* 最初から表示しておきます */
+            display: block;
         }
         #startBtn {
             padding: 16px 32px;
@@ -57,21 +57,27 @@
         const ctx = canvas.getContext('2d');
         const startBtn = document.getElementById('startBtn');
 
-        // 🌳 画像ファイルを読み込み
+        // 🌳【修正】ご提示いただいた世界樹のURLを直接セットしました！
         const treeImg = new Image();
-        treeImg.src = 'tree.png'; 
+        treeImg.crossOrigin = "anonymous"; // ネット上の画像を安全に扱うための設定
+        treeImg.src = 'https://img1.mitemin.net/g3/mj/2txw8fapepkqd1o8fs86c53z4c_9vl_18g_18g_3cih.png'; 
 
         let audioContext, analyser, dataArray, audioStream;
         let isPlaying = false, isGameOver = false;
         let timeLeft = 30, timerInterval, bloomProgress = 0, flowers = [];
         let imgLoaded = false;
 
+        // 画像が読み込めたらフラグを立てる
         treeImg.onload = () => { 
             imgLoaded = true; 
         };
 
-        // 🔄 ゲームが始まっていなくても、常に画面を秒間60回描き直すループを起動
-        // これにより、画像の読み込みが完了した瞬間に自動で画面に表示されます
+        // 万が一上の処理がスマホで一瞬遅れても、すでに読み込み済みならフラグをオンにする安全策
+        if (treeImg.complete) {
+            imgLoaded = true;
+        }
+
+        // 🔄 常に画面を秒間60回描き直すループ
         function animate() {
             drawGame();
             requestAnimationFrame(animate);
@@ -81,14 +87,14 @@
         startBtn.addEventListener('click', async () => {
             if (isPlaying) return;
 
-            // 1. ボタンを「何よりも最優先で」即座に消す
+            // ボタンを最優先で即座に消す
             startBtn.style.display = 'none';
             isPlaying = true;
             isGameOver = false;
             timeLeft = 30;
             bloomProgress = 0;
 
-            // 2. 花の配置を計算（中央に丸く）
+            // 花の配置を計算（中央に丸く）
             flowers = [];
             const totalFlowers = 350; 
             const centerX = canvas.width / 2;
@@ -113,13 +119,13 @@
                 });
             }
 
-            // 3. タイマースタート
+            // タイマースタート
             timerInterval = setInterval(() => {
                 timeLeft--;
                 if (timeLeft <= 0) endGame();
             }, 1000);
 
-            // 4. 最後にマイクを起動（ポップアップで画面が止まっても裏で描画は維持されます）
+            // マイクを起動
             try {
                 audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -129,12 +135,10 @@
                 source.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
             } catch (err) {
-                // マイクが拒否されても、ゲーム（タイマー）自体は止まらないようにする安全策
                 console.log('マイクなしモードで実行します');
             }
         });
 
-        // 毎フレームの音量チェック
         function updateAudio() {
             if (!analyser) return;
             analyser.getByteFrequencyData(dataArray);
@@ -148,7 +152,6 @@
             }
         }
 
-        // 画面の描画処理（常に呼び出され続けます）
         function drawGame() {
             if (isPlaying) {
                 updateAudio();
@@ -158,18 +161,18 @@
             ctx.fillStyle = '#030308';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. 世界樹（画像）の描画
+            // 1. 世界樹（ネット上の画像）の描画
             ctx.save();
             if (imgLoaded) {
+                // 白背景を透明化して黒に溶け込ませる設定
                 ctx.globalCompositeOperation = 'screen';
                 ctx.globalAlpha = 0.4; 
                 ctx.drawImage(treeImg, 50, 50, 400, 400);
             } else {
-                // 万が一画像がまだ読み込めていない場合の文字表示
                 ctx.fillStyle = 'rgba(255,255,255,0.2)';
                 ctx.font = '14px sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText('画像を読み込み中...', 250, 250);
+                ctx.fillText('大樹を呼び出し中...', 250, 250);
             }
             ctx.restore();
 
