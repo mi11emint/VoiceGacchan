@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音声インベーダー（移動ボタン付き）</title>
+    <title>音声インベーダー（ラスト10秒ラッシュ版）</title>
     <style>
         body {
             margin: 0;
@@ -16,7 +16,7 @@
             justify-content: center;
             height: 100vh;
             overflow: hidden;
-            user-select: none; /* ボタン連打時の誤選択防止 */
+            user-select: none;
         }
         #gameCanvas {
             border: 2px solid #555;
@@ -39,7 +39,6 @@
             color: #aaa;
             margin-bottom: 5px;
         }
-        /* 🕹 左右移動ボタンのスタイル */
         .controls {
             display: flex;
             justify-content: space-around;
@@ -59,7 +58,7 @@
             border: 2px solid #555;
             border-radius: 10px;
             cursor: pointer;
-            touch-action: manipulation; /* スマホでの連打ズームを防止 */
+            touch-action: manipulation;
         }
         .btn-move:active {
             background-color: #555;
@@ -68,7 +67,7 @@
 </head>
 <body>
 
-    <div id="info">【声で撃て！】下のボタンで左右に動けます ◀ ▶</div>
+    <div id="info">【緊迫の30秒】ラスト10秒は怒涛の5倍ラッシュ！👾🔥</div>
     <button id="startBtn">ゲームスタート</button>
     <canvas id="gameCanvas" width="400" height="500"></canvas>
 
@@ -90,31 +89,25 @@
         let isPlaying = false;
         let isGameOver = false;
 
-        // ゲーム状態
         let score = 0;
-        let timeLeft = 30; // 30秒の制限時間
+        let timeLeft = 30;
         let timerInterval;
 
-        // オブジェクト管理
         let bullets = [];
         let invaders = [];
-        let player = { x: canvas.width / 2, y: canvas.height - 40, speed: 5 };
+        let player = { x: canvas.width / 2, y: canvas.height - 40, speed: 7 };
 
-        // ボタンの入力状態フラグ
         let moveLeft = false;
         let moveRight = false;
 
-        // 音声用
         let voiceDuration = 0;
         let isBeaming = false;
         let invaderSpawnTimer = 0;
 
-        // 🕹 左右ボタンのイベント設定（スマホのタッチとPCのクリック両対応）
         const setBtnEvent = (btn, startFlag, endFlag) => {
             btn.addEventListener('mousedown', () => { if(isPlaying) startFlag() });
             btn.addEventListener('mouseup', () => { endFlag() });
             btn.addEventListener('mouseleave', () => { endFlag() });
-            
             btn.addEventListener('touchstart', (e) => { e.preventDefault(); if(isPlaying) startFlag() });
             btn.addEventListener('touchend', (e) => { e.preventDefault(); endFlag() });
         };
@@ -122,7 +115,6 @@
         setBtnEvent(leftBtn, () => moveLeft = true, () => moveLeft = false);
         setBtnEvent(rightBtn, () => moveRight = true, () => moveRight = false);
 
-        // PCのキーボード（← / →）でも動かせるようにオマケ機能
         window.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowLeft') moveLeft = true;
             if (e.key === 'ArrowRight') moveRight = true;
@@ -182,7 +174,7 @@
             for (let i = 0; i < dataArray.length; i++) total += dataArray[i];
             let volume = total / dataArray.length;
 
-            const threshold = 15; // 高感度
+            const threshold = 15;
 
             if (volume > threshold) {
                 voiceDuration++;
@@ -192,19 +184,19 @@
                     bullets.push({
                         x: player.x,
                         y: player.y - 10,
-                        width: Math.min(volume * 0.5, 40),
+                        width: Math.min(volume * 0.5, 45),
                         height: 25,
-                        speed: 12,
+                        speed: 14,
                         color: '#f0f',
                         isBeam: true
                     });
                 } else {
-                    if (voiceDuration % 5 === 1) {
+                    if (voiceDuration % 4 === 1) {
                         bullets.push({
                             x: player.x,
                             y: player.y - 10,
                             radius: Math.min(volume * 0.4, 30),
-                            speed: 7,
+                            speed: 8,
                             color: '#0fa',
                             isBeam: false
                         });
@@ -217,37 +209,41 @@
         }
 
         function updateGame() {
-            // 自機の移動処理
             if (moveLeft) player.x -= player.speed;
             if (moveRight) player.x += player.speed;
 
-            // 画面外に飛び出さないようにストッパー
             if (player.x < 20) player.x = 20;
             if (player.x > canvas.width - 20) player.x = canvas.width - 20;
 
-            // 弾の移動
             for (let i = bullets.length - 1; i >= 0; i--) {
                 bullets[i].y -= bullets[i].speed;
                 if (bullets[i].y < -50) bullets.splice(i, 1);
             }
 
-            // インベーダーの出現
+            // ⭐ 出現間隔の計算（ラスト10秒は5倍多く降らせる！）
             invaderSpawnTimer++;
-            if (invaderSpawnTimer > 40) {
-                invaders.push({
-                    x: Math.random() * (canvas.width - 50) + 25,
-                    y: -20,
-                    size: 22,
-                    speed: 1.2 + Math.random() * 1.5
-                });
+            
+            // 通常時は15フレームに1回、ラスト10秒は3フレームに1回（5倍速）
+            const spawnInterval = (timeLeft <= 10) ? 3 : 15;
+
+            if (invaderSpawnTimer > spawnInterval) {
+                // さらにラスト10秒は、30%の確率で2匹同時出現の制限を無くし、常にドバドバ降らせる
+                const spawnCount = (timeLeft <= 10) ? (Math.random() < 0.5 ? 2 : 1) : (Math.random() < 0.3 ? 2 : 1);
+                
+                for(let c = 0; c < spawnCount; c++) {
+                    invaders.push({
+                        x: Math.random() * (canvas.width - 50) + 25,
+                        y: -20 - (c * 20),
+                        size: 22,
+                        // ラスト10秒は少しだけインベーダーの落下速度も上げて、緊迫感をプラス
+                        speed: (timeLeft <= 10) ? (2.0 + Math.random() * 2.5) : (1.5 + Math.random() * 2.0)
+                    });
+                }
                 invaderSpawnTimer = 0;
             }
 
-            // インベーダーの移動
             for (let i = invaders.length - 1; i >= 0; i--) {
                 invaders[i].y += invaders[i].speed;
-
-                // ⭐ 修正：一番下まで来たら、ゲーム終了せずに消滅させるだけにする
                 if (invaders[i].y > canvas.height + 20) {
                     invaders.splice(i, 1);
                 }
@@ -320,6 +316,12 @@
             ctx.font = '16px sans-serif';
             ctx.textAlign = 'left';
             ctx.fillText(`SCORE: ${score}`, 15, 30);
+            
+            // ⭐ ラスト10秒はタイマーの色を赤くして点滅っぽく目立たせる演出
+            if (timeLeft <= 10) {
+                ctx.fillStyle = '#ff3333';
+                ctx.font = 'bold 18px sans-serif';
+            }
             ctx.textAlign = 'right';
             ctx.fillText(`TIME: ${timeLeft}s`, canvas.width - 15, 30);
 
