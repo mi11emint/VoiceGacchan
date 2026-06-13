@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D音声リズムゲーム（低音感度UP＆白ゲージ版）</title>
+    <title>3D音声リズムゲーム（3コンボ花火版）</title>
     <style>
         body {
             margin: 0;
@@ -46,7 +46,7 @@
 </head>
 <body>
 
-    <div id="info">【低音感度強化】サークルゲージが白に進化！低音もサクサク反応します👏</div>
+    <div id="info">【3コンボで解放】トリプルコンボで中央の白ゲージが満タンに！花火を打ち上げよう🎆</div>
     <button id="startBtn">ゲームスタート</button>
     <canvas id="gameCanvas" width="400" height="500"></canvas>
 
@@ -137,10 +137,9 @@
                 let val = dataArray[i];
                 let currentHz = i * hzPerBucket;
 
-                // ⭐【修正】スマホマイクが拾いにくい低音（444Hz未満）の数値を内部で1.5倍にブースト！
                 if (currentHz < 444) {
                     val = val * 1.5;
-                    if (val > 255) val = 255; // 上限打ち止め
+                    if (val > 255) val = 255; 
                 }
 
                 if (val > maxVal) {
@@ -149,10 +148,7 @@
                 }
             }
 
-            // 全体の平均音量を計算（ここもブースト後の値で計算されるため感度が上がります）
-            let volume = maxVal; // 瞬間的な最大音量を取り入れることで手拍子のキレに合わせる
-            
-            // ⭐【修正】全体の反応しきい値を「18」から「14」に下げて小さな手拍子も検知
+            let volume = maxVal; 
             const threshold = 14; 
 
             if (inputCooldown > 0) {
@@ -162,8 +158,6 @@
 
             if (volume > threshold && canInput) {
                 const peakHz = maxIndex * hzPerBucket;
-                
-                // 444Hz以上を高音、未満を低音
                 let isHighPitch = peakHz >= 444;
 
                 checkJudgment(isHighPitch); 
@@ -251,9 +245,10 @@
                 notes.splice(targetIndex, 1);
             }
 
-            if (hitSuccess && combo >= 10) {
+            // ⭐【修正】10コンボから『3コンボ』で花火が上がるように変更！
+            if (hitSuccess && combo >= 3) {
                 triggerFireworkShow(); 
-                combo = 0; 
+                combo = 0; // ゲージをリセットして次の3コンボへ
             }
         }
 
@@ -340,7 +335,7 @@
                 ctx.restore();
             });
 
-            // ⭐【修正】中央コンボゲージ（ネオンに光るスタイリッシュな白色）
+            // ⭐【修正】3コンボ満タン仕様に合わせた白色のサークルゲージ
             ctx.save();
             ctx.strokeStyle = "#151525";
             ctx.lineWidth = 6;
@@ -350,10 +345,11 @@
 
             if (combo > 0) {
                 ctx.shadowBlur = 12;
-                ctx.shadowColor = "#ffffff"; // 白色の発光
-                ctx.strokeStyle = "#ffffff"; // 白色のゲージ
+                ctx.shadowColor = "#ffffff"; 
+                ctx.strokeStyle = "#ffffff"; 
                 ctx.lineWidth = 6;
-                let progressAngle = (combo / 10) * Math.PI * 2;
+                // ⭐ 3回で1周（満タン）になるように計算を変更
+                let progressAngle = (combo / 3) * Math.PI * 2;
                 ctx.beginPath();
                 ctx.arc(centerX, centerY, 22, -Math.PI / 2, (-Math.PI / 2) + progressAngle);
                 ctx.stroke();
