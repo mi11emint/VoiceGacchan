@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D音声リズムゲーム（淡い花火＆ボイス特化版）</title>
+    <title>3D音声リズムゲーム（高音判定緩和＆大輪淡光花火版）</title>
     <style>
         body {
             margin: 0;
@@ -46,7 +46,7 @@
 </head>
 <body>
 
-    <div id="info">【ボイス・楽器最適化】3コンボで、サイドに「淡く美しく光る花火」が優しく咲きます🎆</div>
+    <div id="info">【境界線を300Hzに緩和！】少し高めの声や音で上が反応します。花火の淡い光もボリュームアップ！🎆</div>
     <button id="startBtn">ゲームスタート</button>
     <canvas id="gameCanvas" width="400" height="500"></canvas>
 
@@ -77,7 +77,6 @@
         let hitEffects = [];
         let fireworks = [];
 
-        // ⭐【声・楽器用チューニング】長音の誤反応を防ぐ状態管理
         let lastVolume = 0;
         let inputCooldown = 0;
 
@@ -135,10 +134,9 @@
                 let val = dataArray[i];
                 let currentHz = i * hzPerBucket;
 
-                // 低音域の感度ブースト
-                if (currentHz < 400) {
-                    val = val * 1.4;
-                    if (val > 255) val = 255;
+                // 低音域の過剰なブーストを抑え、純粋に高い周波数が勝てるように調整
+                if (currentHz < 300) {
+                    val = val * 1.1; 
                 }
 
                 if (val > maxVal) {
@@ -148,25 +146,24 @@
             }
 
             let currentVolume = maxVal;
-            const threshold = 40; // 声や楽器用に少しハッキリした音量基準に設定
+            const threshold = 35; 
 
             if (inputCooldown > 0) inputCooldown--;
 
-            // ⭐【超重要】前フレームの音量より「急激に大きくなった瞬間」だけを狙い撃ち（トリガー化）
-            // これにより、声が「ハーーイ」と伸びていても、最初の「ハ」の瞬間だけに反応します
             let volumeSpike = currentVolume - lastVolume;
 
-            if (currentVolume > threshold && volumeSpike > 15 && inputCooldown === 0) {
+            if (currentVolume > threshold && volumeSpike > 12 && inputCooldown === 0) {
                 const peakHz = maxIndex * hzPerBucket;
                 
-                // ⭐ 声・楽器が一番気持ちよく分離する境界（400Hz）で判定
-                let isHighPitch = peakHz >= 400;
+                // ⭐【修正】高音と認める境界線を「300Hz」に下げました。
+                // 人の声の「高い方の成分」や、楽器の音が、劇的に「高音（上）」へ判定されやすくなります！
+                let isHighPitch = peakHz >= 300;
 
                 checkJudgment(isHighPitch); 
-                inputCooldown = 12; // 次の音を拾うまでの短いクールダウン
+                inputCooldown = 12; 
             }
 
-            lastVolume = currentVolume; // 音量を記憶
+            lastVolume = currentVolume; 
         }
 
         function updateGame() {
@@ -195,13 +192,12 @@
                 if (hitEffects[i].alpha <= 0) hitEffects.splice(i, 1);
             }
 
-            // 淡い花火のフェードアウト処理
             for (let i = fireworks.length - 1; i >= 0; i--) {
                 let fw = fireworks[i];
                 fw.delay--;
                 if (fw.delay <= 0) {
                     fw.state = "explode";
-                    fw.alpha -= 0.025; // 少しだけスッと儚く消えるように
+                    fw.alpha -= 0.022; // ゆったり消えるように少しだけ生存時間を延長
                     fw.radius += fw.expandSpeed; 
                     fw.expandSpeed *= 0.95; 
                 }
@@ -255,9 +251,7 @@
             }
         }
 
-        // ⭐【修正】淡くて幻想的な色彩の「パステル淡発光花火」にリデザイン
         function triggerFireworkShow() {
-            // パステルピンク、パステルブルー、ペールイエロー、ミントグリーン、ラベンダーパープル
             const pastelColors = ["#ffb7d5", "#b2ebf2", "#fff59d", "#c8e6c9", "#e1bee7"];
             for (let i = 0; i < 5; i++) {
                 let fireworkX = (Math.random() > 0.5) ? (Math.random() * 90 + 30) : (Math.random() * 90 + 280);
@@ -270,7 +264,7 @@
                     maxRadius: Math.random() * 25 + 35,
                     expandSpeed: 2.2 + Math.random() * 1.2,
                     color: pastelColors[i % pastelColors.length],
-                    alpha: 0.9, // 最初から少し透明感を持たせる
+                    alpha: 0.95, 
                     delay: i * 9, 
                     state: "wait"
                 });
@@ -282,20 +276,29 @@
             ctx.fillStyle = '#020206';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // ⭐【修正】淡い花火の描画（線を少し細くし、光の広がりを優しく）
+            // ⭐【修正】花火の外側のカラー円まで、淡い光のオーラが大きく広がるように描画を強化！
             fireworks.forEach(fw => {
                 if (fw.state === "explode") {
                     ctx.save();
                     ctx.globalAlpha = fw.alpha;
-                    ctx.shadowBlur = 15; // 柔らかい光に
-                    ctx.shadowColor = fw.color;
-                    ctx.strokeStyle = fw.color;
-                    ctx.lineWidth = 1.8; // 線を細くして儚さを演出
-                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius, 0, Math.PI * 2); ctx.stroke();
                     
-                    // 中心の光の点もうっすら優しく
-                    ctx.fillStyle = "rgba(255,255,255,0.7)";
-                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius * 0.1, 0, Math.PI * 2); ctx.fill();
+                    // 1. まず、輪っかの外側を包み込むような「超広範囲の淡い光の衣（ぼかし）」を描く
+                    ctx.shadowBlur = fw.radius * 1.2; // 輪っかの大きさに比例して発光が広がる
+                    ctx.shadowColor = fw.color;
+                    
+                    // 2. メインの綺麗なパステルカラーの円の線
+                    ctx.strokeStyle = fw.color;
+                    ctx.lineWidth = 2.2; // 少しだけ線を太くして発光の存在感をUP
+                    ctx.beginPath(); 
+                    ctx.arc(fw.x, fw.y, fw.radius, 0, Math.PI * 2); 
+                    ctx.stroke();
+                    
+                    // 3. 中心の淡い白い核
+                    ctx.fillStyle = "rgba(255,255,255,0.8)";
+                    ctx.beginPath(); 
+                    ctx.arc(fw.x, fw.y, fw.radius * 0.1, 0, Math.PI * 2); 
+                    ctx.fill();
+                    
                     ctx.restore();
                 }
             });
