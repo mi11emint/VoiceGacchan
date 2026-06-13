@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音声リズムゲーム（動画保存中版）</title>
+    <title>音声リズムゲーム（超巨大＆限界発光花火版）</title>
     <style>
         body {
             margin: 0;
@@ -38,7 +38,7 @@
 
     <div id="info">・・・保存待ち時間中・・・<br><br>
       音声リズムゲーム<br>
-      声や音で下枠○を狙って！^.ˬ.^ฅⳊ</div>
+      声や音で下枠○を狙って！ 5コンボで画面を覆う大花火🎇^.ˬ.^</div>
     <canvas id="gameCanvas" width="400" height="500"></canvas>
 
     <script>
@@ -69,7 +69,7 @@
         let notes = [];
         let nextSpawnCountdown = 0;
         let hitEffects = [];
-        let fireworks = []; // ⭐ 世界樹スタイルのオーブ演出用配列
+        let fireworks = []; // ⭐ 超巨大花火用配列
 
         let lastVolume = 0;
         let inputCooldown = 0;
@@ -235,17 +235,15 @@
                 if (hitEffects[i].alpha <= 0) hitEffects.splice(i, 1);
             }
 
-            // 🛠️ 世界樹風オーブのアップデート処理
+            // ⭐ 超巨大＆限界発光花火のアップデート処理
             for (let i = fireworks.length - 1; i >= 0; i--) {
                 let fw = fireworks[i];
                 fw.delay--;
                 if (fw.delay <= 0) {
                     fw.state = "explode";
-                    fw.alpha -= 0.015; // じわっと消えていく速度
-                    // 徐々に花が開くように少しだけサイズアップ
-                    if (fw.radius < fw.maxRadius) {
-                        fw.radius += (fw.maxRadius - fw.radius) * 0.1;
-                    }
+                    fw.alpha -= 0.012; // さらにゆっくりと余韻を残して消える
+                    fw.radius += fw.expandSpeed; 
+                    fw.expandSpeed *= 0.97; // 巨大さを出すため、減速率を低く（なかなか止まらない）
                 }
                 if (fw.alpha <= 0) fireworks.splice(i, 1);
             }
@@ -296,23 +294,26 @@
             }
         }
 
-        // 🛠️ 花火の代わりに世界樹の発光オーブを生成
+        // ⭐ コンボMAXで画面を覆い尽くす超巨大・限界発光花火を生成
         function triggerFireworkShow() {
-            const pastelColors = ["#ffb7d5", "#b2ebf2", "#fff59d", "#c8e6c9", "#e1bee7", "#ffcc80"];
+            // パステルカラーに、より発光が強い白とネオンブルーを追加
+            const pastelColors = ["#ffffff", "#ffb7d5", "#b2ebf2", "#fff59d", "#e0ffff", "#e1bee7"];
             for (let i = 0; i < 6; i++) {
-                // レーンを邪魔しないよう左右の空きスペースにランダム配置
-                let fireworkX = (Math.random() > 0.5) ? (Math.random() * 80 + 30) : (Math.random() * 80 + 290);
-                let fireworkY = Math.random() * 220 + 100; 
+                // 画面全体に大きく広がるように配置
+                let fireworkX = Math.random() * (canvas.width - 60) + 30;
+                let fireworkY = Math.random() * 250 + 80; 
 
                 fireworks.push({
                     x: fireworkX,
                     y: fireworkY,
-                    radius: 2,
-                    maxRadius: Math.random() * 5 + 4.5, // 世界樹の花（maxSize: 2.5〜6）に近いサイズ感
+                    radius: 3,
+                    // ⭐【巨大化】これまでの2倍以上！画面からはみ出るレベル
+                    maxRadius: Math.random() * 50 + 110, 
+                    // ⭐【爆速】一瞬で画面を覆うスピード
+                    expandSpeed: 8.0 + Math.random() * 4.0, 
                     color: pastelColors[Math.floor(Math.random() * pastelColors.length)],
                     alpha: 1.0, 
-                    delay: i * 5, // ポポポンと心地よい時間差で咲く
-                    sparkleOffset: Math.random() * 100,
+                    delay: i * 3, // ポポポンッとほぼ同時に咲く
                     state: "wait"
                 });
             }
@@ -323,29 +324,41 @@
             ctx.fillStyle = '#020206';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 🛠️ 世界樹風・発光オーブ（宝石の花）の描画処理
-            let now = Date.now();
+            // ⭐ 超巨大・限界発光花火（世界樹満開モード）の描画処理
             fireworks.forEach(fw => {
                 if (fw.state === "explode") {
                     ctx.save();
-                    // 世界樹と同じく、サイン波でキラキラまたたく効果
-                    let sparkle = Math.sin((now / 150) + fw.sparkleOffset) * 0.25 + 0.75;
-                    ctx.globalAlpha = fw.alpha * sparkle;
+                    // ⭐ フェードアウトを少し遅らせて、まばゆさを維持
+                    ctx.globalAlpha = fw.alpha;
                     
-                    // パステルカラーの外光（ぼかし効果）
-                    ctx.shadowBlur = fw.radius * 2.5; 
+                    // ⭐【限界発光】4層の光のオーラを重ねて、圧倒的なまばゆさを表現
+                    
+                    // 1層目（最外層）：巨大な淡いパステル光（世界樹の影）
+                    ctx.shadowBlur = fw.radius * 3.5; 
                     ctx.shadowColor = fw.color;
-                    ctx.fillStyle = fw.color;
-                    ctx.beginPath(); 
-                    ctx.arc(fw.x, fw.y, fw.radius, 0, Math.PI * 2); 
-                    ctx.fill();
+                    ctx.strokeStyle = fw.color;
+                    ctx.lineWidth = 6;
+                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius, 0, Math.PI * 2); ctx.stroke();
                     
-                    // 内側の白い光の核
-                    ctx.shadowBlur = 0;
+                    // 2層目：強いネオン光の輪
+                    ctx.shadowBlur = fw.radius * 1.2;
+                    ctx.shadowColor = "#ffffff";
+                    ctx.strokeStyle = fw.color;
+                    ctx.lineWidth = 15;
+                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius * 0.9, 0, Math.PI * 2); ctx.stroke();
+                    
+                    // 3層目：真っ白な芯の光の輪（世界樹の幹の光）
+                    ctx.shadowBlur = 30;
+                    ctx.shadowColor = "#ffffff";
+                    ctx.lineWidth = 5;
+                    ctx.strokeStyle = "#ffffff"; 
+                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius * 0.85, 0, Math.PI * 2); ctx.stroke();
+                    
+                    // 4層目（最内層）：画面を白く飛ばすほどの中心コア
                     ctx.fillStyle = "#ffffff";
-                    ctx.beginPath(); 
-                    ctx.arc(fw.x, fw.y, fw.radius * 0.35, 0, Math.PI * 2); 
-                    ctx.fill();
+                    ctx.shadowBlur = 50;
+                    ctx.shadowColor = "#ffffff";
+                    ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius * 0.2, 0, Math.PI * 2); ctx.fill();
                     
                     ctx.restore();
                 }
@@ -433,6 +446,7 @@
             clearInterval(timerInterval);
             drawGame();
             
+            // ⭐【重要】マイクのストリームを完全にストップし、接続を強制終了します
             if (audioStream) {
                 audioStream.getTracks().forEach(track => track.stop());
             }
