@@ -46,7 +46,7 @@
 </head>
 <body>
 
-    <div id="info">【作戦変更】音程なし！声や楽器のタイミングだけで下枠を狙え！5コンボで超発光花火🎆</div>
+    <div id="info">【完全シンプル化】音程なし！声や楽器のタイミングだけで下枠を狙え！5コンボで超発光花火🎆</div>
     <button id="startBtn">ゲームスタート</button>
     <canvas id="gameCanvas" width="400" height="500"></canvas>
 
@@ -68,7 +68,6 @@
 
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
-        // ⭐ 上の判定を無くし、中央（上）から下へ流れるレーン1本に変更
         const spawnY = 80;
         const judgeLowY = canvas.height - 70;
         const targetRadius = 32;
@@ -127,7 +126,6 @@
             if (!analyser) return;
             analyser.getByteFrequencyData(dataArray);
             
-            // ⭐ 音程の区別を無くしたため、純粋に全体の音量をチェック
             let maxVal = 0;
             for (let i = 0; i < dataArray.length; i++) {
                 if (dataArray[i] > maxVal) {
@@ -136,15 +134,14 @@
             }
 
             let currentVolume = maxVal;
-            const threshold = 30; // 声や楽器がサクッと反応しやすい音量基準
+            const threshold = 30; 
 
             if (inputCooldown > 0) inputCooldown--;
 
             let volumeSpike = currentVolume - lastVolume;
 
-            // 声や楽器が「発音された瞬間（立ち上がり）」だけを正確にキャッチ
             if (currentVolume > threshold && volumeSpike > 10 && inputCooldown === 0) {
-                checkJudgment(); // タイミング判定へ直接ジャンプ！
+                checkJudgment(); 
                 inputCooldown = 10; 
             }
 
@@ -154,7 +151,7 @@
         function updateGame() {
             nextSpawnCountdown--;
             if (nextSpawnCountdown <= 0) {
-                // すべて下の判定枠に向かうノーツを生成
+                // ⭐【修正】高音（high）の概念を完全撤去！すべて共通の通常ノーツとして生成
                 notes.push({
                     progress: 0, 
                     speed: 0.014 + Math.random() * 0.006
@@ -166,7 +163,7 @@
                 notes[i].progress += notes[i].speed;
                 if (notes[i].progress > 1.15) {
                     notes.splice(i, 1);
-                    combo = 0; // 見逃したらコンボリセット
+                    combo = 0; 
                 }
             }
 
@@ -181,7 +178,7 @@
                 fw.delay--;
                 if (fw.delay <= 0) {
                     fw.state = "explode";
-                    fw.alpha -= 0.018; // 少しゆっくり消えるようにして輝きを堪能
+                    fw.alpha -= 0.018; 
                     fw.radius += fw.expandSpeed; 
                     fw.expandSpeed *= 0.95; 
                 }
@@ -228,7 +225,6 @@
                 notes.splice(targetIndex, 1);
             }
 
-            // ⭐【修正】5回コンボで花火が上がるように変更！
             if (hitSuccess && combo >= 5) {
                 triggerFireworkShow(); 
                 combo = 0; 
@@ -239,7 +235,7 @@
             const pastelColors = ["#ffb7d5", "#b2ebf2", "#fff59d", "#c8e6c9", "#e1bee7"];
             for (let i = 0; i < 5; i++) {
                 let fireworkX = (Math.random() > 0.5) ? (Math.random() * 90 + 30) : (Math.random() * 90 + 280);
-                let fireworkY = Math.random() * 200 + 130; // 判定枠を避けた中段エリア
+                let fireworkY = Math.random() * 200 + 130; 
 
                 fireworks.push({
                     x: fireworkX,
@@ -260,7 +256,7 @@
             ctx.fillStyle = '#020206';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // ⭐【修正】圧倒的な光の広がりを表現する「超発光」重ね描きシステム
+            // 超発光花火の描画
             fireworks.forEach(fw => {
                 if (fw.state === "explode") {
                     ctx.save();
@@ -273,10 +269,10 @@
                     ctx.lineWidth = 4;
                     ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius, 0, Math.PI * 2); ctx.stroke();
                     
-                    // 2層目：中心に近い部分のクッキリした強い光の輪
+                    // 2層目：中心に近い部分のクッキリした強い光の輪（芯を白く輝かせる）
                     ctx.shadowBlur = 15;
                     ctx.lineWidth = 1.5;
-                    ctx.strokeStyle = "#ffffff"; // 芯を白く輝かせる
+                    ctx.strokeStyle = "#ffffff"; 
                     ctx.beginPath(); ctx.arc(fw.x, fw.y, fw.radius, 0, Math.PI * 2); ctx.stroke();
                     
                     // 3層目：中央のまばゆいコア
@@ -287,14 +283,14 @@
                 }
             });
 
-            // 単一レーン線（上から下へ）
+            // 単一レーン線
             ctx.strokeStyle = '#101025';
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(centerX, spawnY); ctx.lineTo(centerX, judgeLowY);
             ctx.stroke();
 
-            // 🎯 下の判定リングのみ（サイバーブルー）
+            // 🎯 下の判定リング（サイバーブルー）
             ctx.strokeStyle = 'rgba(0, 150, 255, 0.45)';
             ctx.lineWidth = 4;
             ctx.beginPath(); ctx.arc(centerX, judgeLowY, targetRadius, 0, Math.PI * 2); ctx.stroke();
@@ -310,7 +306,7 @@
                 ctx.restore();
             });
 
-            // 🎵 上から降ってくる白い光ノーツ
+            // 🎵 上から降ってくる白い光ノーツ（残像カラーも青に統一）
             notes.forEach(note => {
                 let currentY = spawnY + (judgeLowY - spawnY) * note.progress;
                 let currentRadius = 3 + (15 * note.progress);
@@ -329,7 +325,7 @@
                 ctx.restore();
             });
 
-            // ⭐【修正】5回コンボ満タン仕様の白いサークルゲージ（中央やや上めに配置して視認性UP）
+            // 5回コンボ満タン仕様の白いサークルゲージ
             let gaugeY = centerY - 20;
             ctx.save();
             ctx.strokeStyle = "#151525";
@@ -343,7 +339,6 @@
                 ctx.shadowColor = "#ffffff"; 
                 ctx.strokeStyle = "#ffffff"; 
                 ctx.lineWidth = 6;
-                // 5回で1周する計算
                 let progressAngle = (combo / 5) * Math.PI * 2;
                 ctx.beginPath();
                 ctx.arc(centerX, gaugeY, 22, -Math.PI / 2, (-Math.PI / 2) + progressAngle);
