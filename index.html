@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音声インベーダー（真の完成版）</title>
+    <title>音声インベーダー（究極完全版）</title>
     <style>
         body {
             margin: 0;
@@ -67,7 +67,7 @@
 </head>
 <body>
 
-    <div id="info">【真の完成】前半の静けさから、後半ボスHP2000の地獄ラッシュへ！🔥</div>
+    <div id="info">【究極完全版】前半は超スロー＆過疎、後半はボスHP2000＆爆速超大群！🔥</div>
     <button id="startBtn">ゲームスタート</button>
     <canvas id="gameCanvas" width="400" height="500"></canvas>
 
@@ -227,32 +227,39 @@
             // --- インベーダー出現ロジック ---
             invaderSpawnTimer++;
             
-            // ⭐【確実修正】出現間隔（インターバル）をガチガチに固定
-            let spawnInterval = 12; // 中盤（残り20〜16秒）
+            let spawnInterval = 12; // 中盤
             if (timeLeft > 20) {
-                spawnInterval = 48; // 最初の10秒間は、前回のさらに倍の間隔（超のんびり、出現量半分以下！）
+                spawnInterval = 48; // 前半10秒：出現は超のんびり
             } else if (timeLeft <= 15) {
-                spawnInterval = 2;  // ラスト15秒は画面が埋まる限界ラッシュ！
+                spawnInterval = 2;  // 後半15秒：画面が埋まる限界ラッシュ
             }
 
             if (invaderSpawnTimer >= spawnInterval) {
+                // ⭐【修正】最初の10秒間は落下スピードを通常の半分以下（0.6〜1.2）に激減！
+                let invaderSpeed = 1.5 + Math.random() * 2.0; // 通常時
+                if (timeLeft > 20) {
+                    invaderSpeed = 0.6 + Math.random() * 0.6; // 前半10秒間は超スロー
+                } else if (timeLeft <= 15) {
+                    invaderSpeed = 2.0 + Math.random() * 2.5; // 後半ラッシュは高速
+                }
+
                 invaders.push({
                     x: Math.random() * (canvas.width - 50) + 25,
                     y: -20,
                     size: 22,
-                    speed: (timeLeft <= 15) ? (2.0 + Math.random() * 2.5) : (1.5 + Math.random() * 2.0)
+                    speed: invaderSpeed
                 });
                 invaderSpawnTimer = 0;
             }
 
-            // ボス出現判定（⭐HP2000に超絶強化）
+            // ボス出現判定（HP2000）
             if (timeLeft <= 15 && !hasBossSpawned) {
                 boss = {
                     x: canvas.width / 2,
                     y: -50,
                     size: 85, 
-                    speed: 0.35, // さらにじわじわと恐怖感を演出
-                    hp: 2000,   // 耐久力2000！
+                    speed: 0.35, 
+                    hp: 2000,   
                     maxHp: 2000
                 };
                 hasBossSpawned = true;
@@ -290,13 +297,12 @@
                     }
 
                     if (hitBoss) {
-                        // ビームなら1フレームごとに3ダメージ、通常弾なら1ダメージ
                         boss.hp -= bullet.isBeam ? 3 : 1; 
                         score += 20; 
 
                         if (boss.hp <= 0) {
                             boss = null; 
-                            score += 20000; // HP2000撃破は伝説の2万点ボーナス！
+                            score += 20000; 
                         }
 
                         if (!bullet.isBeam) {
@@ -357,16 +363,16 @@
                 }
             });
 
-            // ⭐【修正】ボスの描画（描画順を入れ替えて、王冠👑を絶対に前面へ！）
+            // ボスの描画（王冠が前面！）
             if (boss) {
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
 
-                // 1. 先に背面になる巨大インベーダーを大きく描画
+                // 1. 先にインベーダーを描画
                 ctx.font = `${boss.size}px sans-serif`;
                 ctx.fillText('👾', boss.x, boss.y); 
 
-                // 2. 次に前面になる王冠を頭の上に重ねて描画（これで王冠が手前に来ます）
+                // 2. その上に王冠を上書き
                 ctx.font = `${boss.size * 0.55}px sans-serif`;
                 ctx.fillText('👑', boss.x, boss.y - boss.size * 0.45); 
 
