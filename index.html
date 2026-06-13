@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D音声リズムゲーム（3コンボ花火版）</title>
+    <title>3D音声リズムゲーム（花火エリア制限版）</title>
     <style>
         body {
             margin: 0;
@@ -46,7 +46,7 @@
 </head>
 <body>
 
-    <div id="info">【3コンボで解放】トリプルコンボで中央の白ゲージが満タンに！花火を打ち上げよう🎆</div>
+    <div id="info">【視界クリア版】3コンボで花火解放！ゲームの邪魔にならないサイドエリアに打ち上がります🎆</div>
     <button id="startBtn">ゲームスタート</button>
     <canvas id="gameCanvas" width="400" height="500"></canvas>
 
@@ -245,25 +245,38 @@
                 notes.splice(targetIndex, 1);
             }
 
-            // ⭐【修正】10コンボから『3コンボ』で花火が上がるように変更！
             if (hitSuccess && combo >= 3) {
                 triggerFireworkShow(); 
-                combo = 0; // ゲージをリセットして次の3コンボへ
+                combo = 0; 
             }
         }
 
+        // ⭐【修正】判定リング・中央レーンを絶対に邪魔しない「サイドエリア専用」花火生成
         function triggerFireworkShow() {
             const colors = ["#ff00ff", "#00ffff", "#ffff00", "#ff3366", "#33ff66"];
             for (let i = 0; i < 5; i++) {
+                // 50%の確率で、左の空き地か、右の空き地かを分ける
+                let fireworkX = 0;
+                if (Math.random() > 0.5) {
+                    // 左サイド（X: 30 〜 120 の間）
+                    fireworkX = Math.random() * 90 + 30;
+                } else {
+                    // 右サイド（X: 280 〜 370 の間）
+                    fireworkX = Math.random() * 90 + 280;
+                }
+
+                // Y座標もリングに被らない安全な中段メイン（Y: 130 〜 370 の間）に配置
+                let fireworkY = Math.random() * 240 + 130;
+
                 fireworks.push({
-                    x: Math.random() * (canvas.width - 100) + 50,
-                    y: Math.random() * (canvas.height - 150) + 50,
+                    x: fireworkX,
+                    y: fireworkY,
                     radius: 5,
-                    maxRadius: Math.random() * 40 + 40,
-                    expandSpeed: 3 + Math.random() * 2,
+                    maxRadius: Math.random() * 30 + 35,
+                    expandSpeed: 2.5 + Math.random() * 1.5,
                     color: colors[i % colors.length],
                     alpha: 1.0,
-                    delay: i * 12, 
+                    delay: i * 10, 
                     state: "wait"
                 });
             }
@@ -274,7 +287,7 @@
             ctx.fillStyle = '#020206';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 背景花火
+            // 背景花火（サイドに限定されて描画されます）
             fireworks.forEach(fw => {
                 if (fw.state === "explode") {
                     ctx.save();
@@ -335,7 +348,7 @@
                 ctx.restore();
             });
 
-            // ⭐【修正】3コンボ満タン仕様に合わせた白色のサークルゲージ
+            // 中央コンボゲージ（白色）
             ctx.save();
             ctx.strokeStyle = "#151525";
             ctx.lineWidth = 6;
@@ -348,7 +361,6 @@
                 ctx.shadowColor = "#ffffff"; 
                 ctx.strokeStyle = "#ffffff"; 
                 ctx.lineWidth = 6;
-                // ⭐ 3回で1周（満タン）になるように計算を変更
                 let progressAngle = (combo / 3) * Math.PI * 2;
                 ctx.beginPath();
                 ctx.arc(centerX, centerY, 22, -Math.PI / 2, (-Math.PI / 2) + progressAngle);
