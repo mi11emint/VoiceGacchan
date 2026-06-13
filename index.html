@@ -46,26 +46,42 @@
 </head>
 <body>
 
-    <div id="info">穏やかな語りかけや音楽で、大樹の中央に宝石を咲かせましょう</div>
-    <button id="startBtn" onclick="startGame()">世界樹の声を聴く</button>
-    <canvas id="gameCanvas" width="500" height="500" style="display:none;"></canvas>
+    <div id="info">穏やかな語りかけや音楽で、大樹の中流に宝石を咲かせましょう</div>
+    <button id="startBtn">世界樹の声を聴く</button>
+    <canvas id="gameCanvas" width="500" height="500"></canvas>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const startBtn = document.getElementById('startBtn');
 
-        // 🌳 設定いただいた大樹のURL
-        const TREE_IMAGE_URL = 'https://img1.mitemin.net/g3/mj/2txw8fapepkqd1o8fs86c53z4c_9vl_18g_18g_3cih.png'; 
+        // 🌳 安全のため、同じフォルダに保存したローカル画像ファイルを読み込みます
         const treeImg = new Image();
-        treeImg.crossOrigin = "anonymous";
-        treeImg.src = TREE_IMAGE_URL;
+        treeImg.src = 'images.jpeg'; 
 
         let audioContext, analyser, dataArray, audioStream;
         let isPlaying = false, isGameOver = false;
         let timeLeft = 30, timerInterval, bloomProgress = 0, flowers = [];
+        let imgLoaded = false;
 
-        async function startGame() {
+        treeImg.onload = () => { 
+            imgLoaded = true; 
+            drawInitialTree(); // ゲーム開始前にもうっすら木を見せておく
+        };
+
+        // 開始前の仮描画
+        function drawInitialTree() {
+            ctx.fillStyle = '#030308';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            // 白い背景を黒に馴染ませる魔法のブレンド（スクリーン）
+            ctx.globalCompositeOperation = 'screen';
+            ctx.globalAlpha = 0.3; 
+            ctx.drawImage(treeImg, 50, 50, 400, 400);
+            ctx.restore();
+        }
+
+        startBtn.addEventListener('click', async () => {
             if (isPlaying) return;
             try {
                 audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -76,32 +92,30 @@
                 source.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-                // ⭐ UIの切り替え（ボタンを隠してキャンバスを出す）
+                // ⭐ ボタンを確実に消す
                 startBtn.style.display = 'none';
-                canvas.style.display = 'block';
 
                 isPlaying = true;
                 isGameOver = false;
                 timeLeft = 30;
                 bloomProgress = 0;
                 
-                // ⭐【花の配置】画像の「中心」から円状に広がるように生成
+                // ⭐【花の配置】画像の中央に丸く咲くように計算
                 flowers = [];
-                const totalFlowers = 300; 
+                const totalFlowers = 350; 
                 const centerX = canvas.width / 2;
-                const centerY = canvas.height / 2 - 20; // 木の重心付近
+                // アップロードされた画像の「枝の密集地帯」の中心に合わせました
+                const centerY = canvas.height / 2 - 40; 
 
                 for(let i = 0; i < totalFlowers; i++) {
-                    // 360度（全方位）にランダム配置
-                    let angle = Math.random() * Math.PI * 2;
-                    // 中央に密集しつつ、外側にも広がる計算
-                    let dist = Math.pow(Math.random(), 0.7) * 160; 
+                    let angle = Math.random() * Math.PI * 2; // 360度全方位
+                    // 中央に密度を高く、綺麗な真ん丸の球状に広げる
+                    let dist = Math.pow(Math.random(), 0.8) * 150; 
                     
                     let fx = centerX + Math.cos(angle) * dist;
                     let fy = centerY + Math.sin(angle) * dist;
 
                     const pastelColors = ["#ffb7d5", "#b2ebf2", "#fff59d", "#c8e6c9", "#e1bee7", "#ffcc80"];
-                    // 0%から100%まで均等にバラけさせる
                     let required = 0.01 + Math.random() * 0.98;
 
                     flowers.push({
@@ -120,9 +134,9 @@
 
                 gameLoop();
             } catch (err) {
-                alert('マイクを許可してください');
+                alert('マイクの起動に失敗しました。マイクの許可を確認してください。');
             }
-        }
+        });
 
         function gameLoop() {
             if (!isPlaying) return;
@@ -139,26 +153,29 @@
             let avg = total / dataArray.length;
 
             if (avg > 15) {
-                // 進行スピード（約20秒で満開）
                 bloomProgress += 0.00085; 
                 if (bloomProgress > 1.1) bloomProgress = 1.1; 
             }
         }
 
         function drawGame() {
+            // 画面クリア
+            ctx.globalCompositeOperation = 'source-over';
             ctx.fillStyle = '#030308';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. 画像の描画（不必要な幹の棒は削除済み）
+            // 1. 世界樹（画像）の描画
             ctx.save();
-            if (treeImg.complete) {
-                ctx.globalAlpha = 0.5; // 背景に馴染ませる
-                // 画像を中央に配置
-                ctx.drawImage(treeImg, 50, 60, 400, 400);
+            if (imgLoaded) {
+                // ⭐ 背景が白い画像でも、黒背景に一瞬で馴染ませるブレンドモード
+                ctx.globalCompositeOperation = 'screen';
+                ctx.globalAlpha = 0.4; // ほんのり白っぽく綺麗に浮き上がらせる
+                ctx.drawImage(treeImg, 50, 50, 400, 400);
             }
             ctx.restore();
 
-            // 2. 花の描画
+            // 2. 宝石の花の描画（通常モードに戻して描画）
+            ctx.globalCompositeOperation = 'source-over';
             let now = Date.now();
             flowers.forEach(f => {
                 if (bloomProgress >= f.requiredProgress) {
@@ -166,12 +183,11 @@
                     let sparkle = Math.sin((now / 200) + f.sparkleOffset) * 0.25 + 0.75;
                     ctx.globalAlpha = sparkle;
                     
-                    // 開花具合でサイズを計算（14%で満開にならないよう調整）
                     let timeSinceBloom = bloomProgress - f.requiredProgress;
                     let sizeGrowth = Math.min(1.0, timeSinceBloom * 4 + 0.15); 
                     let currentSize = f.maxSize * sizeGrowth;
 
-                    ctx.shadowBlur = currentSize * 2.0;
+                    ctx.shadowBlur = currentSize * 2.2;
                     ctx.shadowColor = f.color;
                     ctx.fillStyle = f.color;
                     ctx.beginPath(); ctx.arc(f.x, f.y, currentSize, 0, Math.PI * 2); ctx.fill();
@@ -207,7 +223,6 @@
             setTimeout(() => {
                 startBtn.textContent = 'もう一度育てる';
                 startBtn.style.display = 'block';
-                // canvasを隠す設定はリトライ時に不都合なので、ここでは残します
             }, 2500);
         }
     </script>
