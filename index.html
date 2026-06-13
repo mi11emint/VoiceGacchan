@@ -3,74 +3,235 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ボイスインベーダー (マイク切断版)</title>
+    <title>音声インベーダー（動画保存中版）</title>
     <style>
-        body { margin: 0; background-color: #111; color: white; font-family: sans-serif; text-align: center; overflow: hidden; }
-        canvas { background-color: #000; display: block; margin: 10px auto; border: 2px solid #333; max-width: 100%; max-height: 70vh; }
-        #startBtn { padding: 12px 24px; font-size: 18px; font-weight: bold; background-color: #ff4757; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px; }
+        body {
+            margin: 0;
+            background-color: #111;
+            color: #fff;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+        #gameCanvas {
+            border: 2px solid #555;
+            background-color: #000;
+            max-width: 100%;
+            max-height: 60vh;
+        }
+        #info {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 12px;
+        }
+        .controls {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            max-width: 400px;
+            margin-top: 15px;
+            padding: 0 10px;
+            box-sizing: border-box;
+        }
+        .btn-move {
+            width: 45%;
+            height: 60px;
+            font-size: 24px;
+            font-weight: bold;
+            background-color: #333;
+            color: #fff;
+            border: 2px solid #555;
+            border-radius: 10px;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .btn-move:active {
+            background-color: #555;
+        }
     </style>
 </head>
 <body>
 
-    <button id="startBtn">ゲームスタート（マイクを使用します）</button>
+    <div id="info">【音声インベーダー】前半はスロー、後半はボス出現＆爆速大群！🔥</div>
     <canvas id="gameCanvas" width="400" height="500"></canvas>
+
+    <div class="controls">
+        <button id="leftBtn" class="btn-move">◀</button>
+        <button id="rightBtn" class="btn-move">▶</button>
+    </div>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const startBtn = document.getElementById('startBtn');
+        const leftBtn = document.getElementById('leftBtn');
+        const rightBtn = document.getElementById('rightBtn');
 
-        let audioContext, analyser, dataArray, audioStream; // ⭐ audioStreamを追加
-        let isPlaying = false, isGameOver = false;
-        let timeLeft = 30, score = 0, timerInterval;
+        let audioContext;
+        let analyser;
+        let dataArray;
+        let audioStream; // ⭐ マイクを確実に切断するために保存する変数
+        
+        let isPlaying = false;
+        let isGameOver = false;
+        let isCountingDown = false; // カウントダウン中かどうかのフラグ
+        let countdownNumber = 3;    // カウントダウンの数字
 
-        let player = { x: 180, y: 440, w: 40, h: 20, speed: 6 };
-        let bullets = [], invaders = [];
-        let moveDirection = 0; 
+        let score = 0;
+        let timeLeft = 30;
+        let timerInterval;
 
-        // タッチ操作用（左右に動かす）
-        window.addEventListener('touchstart', (e) => {
-            const touchX = e.touches[0].clientX;
-            moveDirection = (touchX < window.innerWidth / 2) ? -1 : 1;
+        let bullets = [];
+        let invaders = [];
+        let boss = null; 
+
+        let player = { x: canvas.width / 2, y: canvas.height - 40, speed: 9 };
+        let moveLeft = false;
+        let moveRight = false;
+
+        let voiceDuration = 0;
+        let isBeaming = false;
+        let invaderSpawnTimer = 0;
+        let hasBossSpawned = false;
+
+        const setBtnEvent = (btn, startFlag, endFlag) => {
+            btn.addEventListener('mousedown', () => { if(isPlaying) startFlag() });
+            btn.addEventListener('mouseup', () => { endFlag() });
+            btn.addEventListener('mouseleave', () => { endFlag() });
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); if(isPlaying) startFlag() });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); endFlag() });
+        };
+
+        setBtnEvent(leftBtn, () => moveLeft = true, () => moveLeft = false);
+        setBtnEvent(rightBtn, () => moveRight = true, () => moveRight = false);
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') moveLeft = true;
+            if (e.key === 'ArrowRight') moveRight = true;
         });
-        window.addEventListener('touchend', () => { moveDirection = 0; });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft') moveLeft = false;
+            if (e.key === 'ArrowRight') moveRight = false;
+        });
 
-        startBtn.addEventListener('click', async () => {
-            if (isPlaying) return;
+        // 🚀 【新規】画面が開いた瞬間に自動でマイク許可を取り、カウントダウンを開始する処理
+        window.addEventListener('DOMContentLoaded', async () => {
+            // まずは画面に最初の初期状態（黒画面）を描画しておく
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
             try {
-                // ⭐ ストリームを記憶
+                // ページ表示と同時にマイク許可ポップアップを出す
                 audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // ブラウザの音声ブロックを強制解除
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
+
                 const source = audioContext.createMediaStreamSource(audioStream);
                 analyser = audioContext.createAnalyser();
                 analyser.fftSize = 256;
                 source.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-                // 初期化
-                isPlaying = true; isGameOver = false; timeLeft = 30; score = 0;
-                bullets = []; invaders = []; player.x = 180;
-                startBtn.style.display = 'none';
+                // マイクの許可が取れたら、カウントダウン画面へ突入
+                startCountdown();
 
-                spawnInvaders();
-                timerInterval = setInterval(() => {
-                    timeLeft--;
-                    if (timeLeft <= 0) endGame();
-                }, 1000);
-
-                gameLoop();
-            } catch (err) { alert('マイクの許可が必要です：' + err); }
+            } catch (err) {
+                // 万が一拒否された、またはマイクがない場合の安全策
+                ctx.fillStyle = '#fff';
+                ctx.textAlign = 'center';
+                ctx.font = '14px sans-serif';
+                ctx.fillText('マイクを許可、または接続してください', canvas.width / 2, canvas.height / 2);
+                console.log('マイク起動エラー：', err);
+            }
         });
 
-        function spawnInvaders() {
-            for (let row = 0; row < 3; row++) {
-                for (let col = 0; col < 6; col++) {
-                    invaders.push({ x: col * 55 + 40, y: row * 35 + 60, w: 35, h: 20, alive: true });
+        // ⏱️ カウントダウンの処理
+        function startCountdown() {
+            isCountingDown = true;
+            countdownNumber = 3;
+
+            // 1秒ごとに数字を減らすループ
+            const cdInterval = setInterval(() => {
+                countdownNumber--;
+                if (countdownNumber < 0) {
+                    clearInterval(cdInterval);
+                    isCountingDown = false;
+                    // カウントダウン終了でゲーム本番スタート！
+                    startGame();
                 }
+            }, 1000);
+
+            // カウントダウン中も、数字を表示し続けるためにループを回す
+            function countdownLoop() {
+                if (!isCountingDown) return;
+                
+                // 画面クリア
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // 自機だけ先に下にちょこんと表示しておく
+                ctx.fillStyle = '#555'; // まだ始まっていないので少し暗め
+                ctx.fillRect(player.x - 20, player.y, 40, 15);
+                ctx.fillRect(player.x - 5, player.y - 8, 10, 8);
+
+                // カウントダウン文字の描画
+                ctx.fillStyle = '#0fa';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = 'bold 70px sans-serif';
+                
+                if (countdownNumber > 0) {
+                    ctx.fillText(countdownNumber, canvas.width / 2, canvas.height / 2);
+                } else {
+                    ctx.fillStyle = '#f0f';
+                    ctx.fillText('START!', canvas.width / 2, canvas.height / 2);
+                }
+
+                requestAnimationFrame(countdownLoop);
+            }
+            countdownLoop();
+        }
+
+        // ゲーム本番の開始処理
+        function startGame() {
+            isPlaying = true;
+            isGameOver = false;
+            score = 0;
+            timeLeft = 30;
+            hasBossSpawned = false;
+            bullets = [];
+            invaders = [];
+            boss = null;
+
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft <= 0) endGame();
+            }, 1000);
+
+            gameLoop();
+        }
+
+        function gameLoop() {
+            if (!isPlaying) return;
+
+            updateAudio();
+            updateGame();
+            checkCollisions();
+            drawGame();
+
+            if (!isGameOver) {
+                requestAnimationFrame(gameLoop);
             }
         }
 
-        let lastShotTime = 0;
         function updateAudio() {
             if (!analyser) return;
             analyser.getByteFrequencyData(dataArray);
@@ -78,106 +239,252 @@
             for (let i = 0; i < dataArray.length; i++) total += dataArray[i];
             let volume = total / dataArray.length;
 
-            // 声の大きさが基準を超えたら弾を発射（連射制限：0.15秒）
-            let now = Date.now();
-            if (volume > 35 && now - lastShotTime > 150) {
-                bullets.push({ x: player.x + player.w / 2 - 3, y: player.y, w: 6, h: 12, speed: 7 });
-                lastShotTime = now;
-            }
-        }
+            const threshold = 15;
 
-        function gameLoop() {
-            if (!isPlaying) return;
-            updateAudio();
-            updateGame();
-            drawGame();
-            if (!isGameOver) requestAnimationFrame(gameLoop);
+            if (volume > threshold) {
+                voiceDuration++;
+                if (voiceDuration > 15) isBeaming = true;
+
+                if (isBeaming) {
+                    bullets.push({
+                        x: player.x,
+                        y: player.y - 10,
+                        width: Math.min(volume * 0.6, 50),
+                        height: 25,
+                        speed: 15,
+                        color: '#f0f',
+                        isBeam: true
+                    });
+                } else {
+                    if (voiceDuration % 3 === 1) {
+                        bullets.push({
+                            x: player.x,
+                            y: player.y - 10,
+                            radius: Math.min(volume * 0.4, 30),
+                            speed: 9,
+                            color: '#0fa',
+                            isBeam: false
+                        });
+                    }
+                }
+            } else {
+                voiceDuration = 0;
+                isBeaming = false;
+            }
         }
 
         function updateGame() {
-            player.x += moveDirection * player.speed;
-            if (player.x < 0) player.x = 0;
-            if (player.x > canvas.width - player.w) player.x = canvas.width - player.w;
+            if (moveLeft) player.x -= player.speed;
+            if (moveRight) player.x += player.speed;
 
-            bullets.forEach((b, bi) => {
-                b.y -= b.speed;
-                if (b.y < 0) bullets.splice(bi, 1);
-            });
+            if (player.x < 20) player.x = 20;
+            if (player.x > canvas.width - 20) player.x = canvas.width - 20;
 
-            let allDead = true;
-            invaders.forEach(inv => {
-                if (!inv.alive) return;
-                allDead = false;
-                
-                // インベーダーがじわじわ迫る
-                inv.y += 0.2;
-                if (inv.y + inv.h >= player.y) isGameOver = true;
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                bullets[i].y -= bullets[i].speed;
+                if (bullets[i].y < -50) bullets.splice(i, 1);
+            }
 
-                // 弾との当たり判定
-                bullets.forEach((b, bi) => {
-                    if (b.x < inv.x + inv.w && b.x + b.w > inv.x && b.y < inv.y + inv.h && b.y + b.h > inv.y) {
-                        inv.alive = false;
-                        bullets.splice(bi, 1);
-                        score += 10;
-                    }
+            invaderSpawnTimer++;
+            
+            let spawnInterval = 12; 
+            if (timeLeft > 20) {
+                spawnInterval = 48; 
+            } else if (timeLeft <= 15) {
+                spawnInterval = 2;  
+            }
+
+            if (invaderSpawnTimer >= spawnInterval) {
+                let invaderSpeed = 1.5 + Math.random() * 2.0; 
+                if (timeLeft > 20) {
+                    invaderSpeed = 0.6 + Math.random() * 0.6; 
+                } else if (timeLeft <= 15) {
+                    invaderSpeed = 2.0 + Math.random() * 2.5; 
+                }
+
+                invaders.push({
+                    x: Math.random() * (canvas.width - 50) + 25,
+                    y: -20,
+                    size: 22,
+                    speed: invaderSpeed
                 });
-            });
+                invaderSpawnTimer = 0;
+            }
 
-            if (allDead) spawnInvaders(); // 全滅したら次ウエーブ
-            if (isGameOver) endGame();
-        }
+            if (timeLeft <= 15 && !hasBossSpawned) {
+                boss = {
+                    x: canvas.width / 2,
+                    y: -50,
+                    size: 85, 
+                    speed: 0.35, 
+                    hp: 2000,   
+                    maxHp: 2000
+                };
+                hasBossSpawned = true;
+            }
 
-        function drawGame() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (boss) {
+                boss.y += boss.speed;
+                if (boss.y > canvas.height + 50) {
+                    boss.y = -50; 
+                }
+            }
 
-            // プレイヤー
-            ctx.fillStyle = '#00ffcc';
-            ctx.fillRect(player.x, player.y, player.w, player.h);
-
-            // 弾
-            ctx.fillStyle = '#ffff00';
-            bullets.forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
-
-            // インベーダー
-            ctx.fillStyle = '#ff4757';
-            invaders.forEach(inv => {
-                if (inv.alive) ctx.fillRect(inv.x, inv.y, inv.w, inv.h);
-            });
-
-            // UI
-            ctx.fillStyle = 'white'; ctx.font = '16px sans-serif'; ctx.textAlign = 'left';
-            ctx.fillText(`SCORE: ${score}`, 20, 35);
-            ctx.textAlign = 'right';
-            ctx.fillText(`TIME: ${timeLeft}s`, canvas.width - 20, 35);
-
-            if (isGameOver) {
-                ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = '#ff4757'; ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'center';
-                ctx.fillText(timeLeft <= 0 ? 'TIME UP!' : 'GAME OVER', canvas.width / 2, canvas.height / 2);
-                ctx.fillStyle = 'white'; ctx.font = '20px sans-serif';
-                ctx.fillText(`FINAL SCORE: ${score}`, canvas.width / 2, canvas.height / 2 + 40);
+            for (let i = invaders.length - 1; i >= 0; i--) {
+                invaders[i].y += invaders[i].speed;
+                if (invaders[i].y > canvas.height + 20) {
+                    invaders.splice(i, 1);
+                }
             }
         }
 
-        // 🛑【マイク切断】ゲーム終了処理
+        function checkCollisions() {
+            for (let b = bullets.length - 1; b >= 0; b--) {
+                let bullet = bullets[b];
+                if (!bullet) continue;
+
+                if (boss) {
+                    let hitBoss = false;
+                    let dx = bullet.x - boss.x;
+                    let dy = bullet.y - boss.y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < (bullet.radius || bullet.width/2) + boss.size/2.5) {
+                        hitBoss = true;
+                    }
+
+                    if (hitBoss) {
+                        boss.hp -= bullet.isBeam ? 3 : 1; 
+                        score += 20; 
+
+                        if (boss.hp <= 0) {
+                            boss = null; 
+                            score += 20000; 
+                        }
+
+                        if (!bullet.isBeam) {
+                            bullets.splice(b, 1);
+                            continue;
+                        }
+                    }
+                }
+
+                for (let i = invaders.length - 1; i >= 0; i--) {
+                    let invader = invaders[i];
+                    if (!bullet || !invader) continue;
+
+                    let hit = false;
+                    if (bullet.isBeam) {
+                        let closeX = Math.max(bullet.x - bullet.width/2, Math.min(invader.x, bullet.x + bullet.width/2));
+                        let closeY = Math.max(bullet.y, Math.min(invader.y, bullet.y + bullet.height));
+                        let distanceX = invader.x - closeX;
+                        let distanceY = invader.y - closeY;
+                        if ((distanceX * distanceX + distanceY * distanceY) < (invader.size * invader.size)) hit = true;
+                    } else {
+                        let dx = bullet.x - invader.x;
+                        let dy = bullet.y - invader.y;
+                        if (Math.sqrt(dx * dx + dy * dy) < (bullet.radius + invader.size)) hit = true;
+                    }
+
+                    if (hit) {
+                        invaders.splice(i, 1);
+                        score += 100;
+                        if (!bullet.isBeam) {
+                            bullets.splice(b, 1);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        function drawGame() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(player.x - 20, player.y, 40, 15);
+            ctx.fillRect(player.x - 5, player.y - 8, 10, 8);
+
+            bullets.forEach(bullet => {
+                ctx.fillStyle = bullet.color;
+                if (!bullet.isBeam) {
+                    ctx.beginPath();
+                    ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.fillRect(bullet.x - bullet.width / 2, bullet.y, bullet.width, bullet.height);
+                }
+            });
+
+            if (boss) {
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                ctx.font = `${boss.size}px sans-serif`;
+                ctx.fillText('👾', boss.x, boss.y); 
+
+                ctx.font = `${boss.size * 0.55}px sans-serif`;
+                ctx.fillText('👑', boss.x, boss.y - boss.size * 0.45); 
+
+                let barWidth = 120;
+                let barHeight = 10;
+                ctx.fillStyle = '#444';
+                ctx.fillRect(boss.x - barWidth/2, boss.y - boss.size/2 - 25, barWidth, barHeight);
+                ctx.fillStyle = '#0fa';
+                ctx.fillRect(boss.x - barWidth/2, boss.y - boss.size/2 - 25, barWidth * (Math.max(0, boss.hp) / boss.maxHp), barHeight);
+            }
+
+            invaders.forEach(invader => {
+                ctx.font = `${invader.size * 1.3}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('👾', invader.x, invader.y);
+            });
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '16px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(`SCORE: ${score}`, 15, 30);
+            
+            if (timeLeft <= 15) {
+                ctx.fillStyle = '#ff3333';
+                ctx.font = 'bold 18px sans-serif';
+            }
+            ctx.textAlign = 'right';
+            ctx.fillText(`TIME: ${timeLeft}s`, canvas.width - 15, 30);
+
+            if (isGameOver) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#fff';
+                ctx.textAlign = 'center';
+                ctx.font = '24px sans-serif';
+                ctx.fillText('ゲーム終了！', canvas.width / 2, canvas.height / 2 - 20);
+                
+                ctx.fillStyle = '#0fa';
+                ctx.font = '22px sans-serif';
+                ctx.fillText(`最終スコア: ${score}`, canvas.width / 2, canvas.height / 2 + 30);
+            }
+        }
+
+        // 🛑 ゲーム終了処理
         function endGame() {
             isGameOver = true;
             clearInterval(timerInterval);
-
-            // ⭐ マイクストリームを完全に停止
+            drawGame();
+            
+            // 🛡️【重要】マイクのストリームを完全にストップし、接続を強制終了します
             if (audioStream) {
                 audioStream.getTracks().forEach(track => track.stop());
             }
             if (audioContext) {
                 audioContext.close();
             }
-
-            drawGame();
-            setTimeout(() => {
-                startBtn.textContent = 'もう一度あそぶ';
-                startBtn.style.display = 'block';
-                isPlaying = false;
-            }, 2000);
+            
+            // 次の動画保存時にまた起動するため、このゲーム内でのリトライループ用のボタン再表示処理等はカットしました。
+            // 30秒経つと完全に活動を停止し、最終スコアが静かに表示され続けます。
         }
     </script>
 </body>
