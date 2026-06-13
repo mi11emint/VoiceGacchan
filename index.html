@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音響ヒーリングゲーム：世界樹の開花 (マイク切断版)</title>
+    <title>音響ヒーリングゲーム：世界樹の開花 (完成版)</title>
     <style>
         body {
             margin: 0;
@@ -62,16 +62,17 @@
         const ctx = canvas.getContext('2d');
         const startBtn = document.getElementById('startBtn');
 
-        // 使用する画像のファイル名
-        const TREE_IMAGE_URL = 'images.jpeg'; 
+        // 🌳【修正】教えていただいた大樹のURLを直接セットしました！
+        const TREE_IMAGE_URL = 'https://img1.mitemin.net/g3/mj/2txw8fapepkqd1o8fs86c53z4c_9vl_18g_18g_3cih.png'; 
 
         const treeImg = new Image();
+        treeImg.crossOrigin = "anonymous"; // ネット上の画像をCanvasで安全に扱うための設定
         treeImg.src = TREE_IMAGE_URL;
 
         let audioContext;
         let analyser;
         let dataArray;
-        let audioStream; // ⭐【追加】マイクを止めるためにストリームを記憶する変数
+        let audioStream; 
         let isPlaying = false;
         let isGameOver = false;
 
@@ -87,7 +88,6 @@
         startBtn.addEventListener('click', async () => {
             if (isPlaying) return;
             try {
-                // ⭐ マイクのストリームを取得して変数に保存
                 audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 
@@ -102,15 +102,17 @@
                 timeLeft = 30;
                 bloomProgress = 0;
                 
+                // 花の配置
                 flowers = [];
                 const totalFlowers = 350; 
                 
                 for(let i = 0; i < totalFlowers; i++) {
+                    // 画像の大樹の「枝が生い茂るドーム状のエリア」に綺麗に散りばめる
                     let angle = Math.PI + Math.random() * Math.PI; 
                     let radius = Math.random() * 160; 
                     
-                    let fx = (canvas.width / 2) + Math.cos(angle) * radius * 1.1; 
-                    let fy = (canvas.height / 2 - 20) + Math.sin(angle) * radius * 0.9;
+                    let fx = (canvas.width / 2) + Math.cos(angle) * radius * 1.15; 
+                    let fy = (canvas.height / 2 - 20) + Math.sin(angle) * radius * 0.95;
 
                     const pastelColors = ["#ffb7d5", "#b2ebf2", "#fff59d", "#c8e6c9", "#e1bee7", "#ffcc80"];
                     let required = 0.01 + Math.random() * 0.99;
@@ -163,10 +165,10 @@
             ctx.fillStyle = '#030308';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. 画像の描画
+            // 1. お気に入りの大樹を描画
             ctx.save();
             if (imgLoaded) {
-                ctx.globalAlpha = 0.45;
+                ctx.globalAlpha = 0.5; // 宝石の光が目立つように、木の存在感を上品な濃さに
                 ctx.drawImage(treeImg, 40, 80, 420, 390);
             } else {
                 ctx.strokeStyle = '#333b45';
@@ -175,7 +177,7 @@
             }
             ctx.restore();
 
-            // 2. 花の描画
+            // 2. 宝石の花を描画
             let now = Date.now();
             flowers.forEach(f => {
                 if (bloomProgress >= f.requiredProgress) {
@@ -241,16 +243,13 @@
             }
         }
 
-        // 🛑【修正】ゲーム終了時にマイクを完全にオフにする
         function endGame() {
             isGameOver = true;
             clearInterval(timerInterval);
 
-            // ⭐【マイク切断処理】動いているマイクの全トラックを停止させる
             if (audioStream) {
                 audioStream.getTracks().forEach(track => track.stop());
             }
-            // オーディオの解析自体も終了
             if (audioContext) {
                 audioContext.close();
             }
