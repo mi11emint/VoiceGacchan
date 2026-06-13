@@ -4,13 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>にふなみ - 動画保存中ミニゲーム選択</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinecaption&display=swap" rel="stylesheet">
     <style>
         /* --- 🌐 全体共通スタイル --- */
         body {
             margin: 0;
             background-color: #03030a;
             color: #fff;
-            font-family: sans-serif;
+            /* アプリの雰囲気を壊さないよう、メニュー表示時のみフォントを適用 */
+            font-family: 'Cinecaption', 'Hiragino Mincho ProN', 'serif';
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -29,44 +33,74 @@
         }
 
         #info {
-            font-size: 14px;
+            font-size: 15px;
             color: #e0ffff;
-            margin-bottom: 12px;
+            margin-bottom: 30px;
             text-align: center;
             padding: 0 20px;
-            line-height: 1.5;
+            line-height: 1.6;
+            letter-spacing: 0.05em;
         }
 
-        /* --- 📱 1. ゲーム選択メニュー --- */
+        /* --- 📱 にふなみ動画背景選択風：スマートメニュー --- */
         #menuContainer {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 20px;
             width: 280px;
-            margin-top: 20px;
+            margin-top: 10px;
         }
-        .menu-btn {
-            padding: 18px; /* 押しやすいように少し大きく */
-            font-size: 16px;
-            font-weight: bold;
-            color: #fff;
-            background: linear-gradient(135deg, #1a1c2e 0%, #0d0f1d 100%);
-            border: 2px solid #5d6180;
-            border-radius: 10px;
+        
+        /* 選択肢全体のタップエリア */
+        .menu-row {
+            display: flex;
+            align-items: center;
+            font-size: 18px;
+            letter-spacing: 0.05em;
             cursor: pointer;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            transition: all 0.1s;
-            touch-action: manipulation; /* 連打によるズームを防止 */
+            padding: 12px 10px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            transition: background 0.2s, border-color 0.2s;
             -webkit-tap-highlight-color: transparent;
         }
-        .menu-btn:active {
-            transform: scale(0.96);
-            background: #fff !important;
-            color: #000 !important;
+        
+        /* にふなみの洗練されたセレクト感を出すためのホバー・アクティブ表現 */
+        .menu-row.active {
+            background: rgba(255, 255, 255, 0.07);
+            border-color: rgba(255, 255, 255, 0.2);
         }
-        #btnSelectInvader { border-color: #0fa; color: #0fa; }
-        #btnSelectCatch { border-color: #00d2ff; color: #00d2ff; }
-        #btnSelectTree { border-color: #e1bee7; color: #e1bee7; }
+        
+        /* 「▶」マークのスタイルと余白固定 */
+        .menu-pointer {
+            width: 25px;
+            color: #fff;
+            opacity: 0; /* 通常時は見えない */
+            font-size: 14px;
+            transition: opacity 0.15s, transform 0.15s;
+            transform: translateX(-5px);
+        }
+        
+        /* 選択されている行の「▶」だけをスッと表示 */
+        .menu-row.active .menu-pointer {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        
+        /* 文字の配色制御 */
+        .menu-text {
+            color: #888;
+            transition: color 0.15s;
+        }
+        .menu-row.active .menu-text {
+            color: #fff;
+        }
+
+        /* 各ゲームのテーマカラー（アクティブ時） */
+        .menu-row[data-game="invader"].active .menu-text { color: #0fa; text-shadow: 0 0 8px rgba(0,255,170,0.3); }
+        .menu-row[data-game="catch"].active .menu-text { color: #00d2ff; text-shadow: 0 0 8px rgba(0,210,255,0.3); }
+        .menu-row[data-game="tree"].active .menu-text { color: #e1bee7; text-shadow: 0 0 8px rgba(225,190,231,0.3); }
 
         /* --- 🖼️ キャンバス表示制御 --- */
         #gameCanvas {
@@ -78,7 +112,7 @@
         .border-invader { border: 2px solid #555; }
         .border-catch { border: 2px solid #223; box-shadow: 0 0 25px rgba(0,255,255,0.08); }
 
-        /* --- 🕹️ ゲーム操作ボタンエリア --- */
+        /* --- 🕹️ ゲームプレイ時操作ボタンエリア --- */
         .controls-area {
             display: none;
             justify-content: space-around;
@@ -158,9 +192,15 @@
         <div id="info">・・・保存待ち時間中・・・<br>ミニゲームを選んでね！</div>
         
         <div id="menuContainer">
-            <button class="menu-btn" id="btnSelectInvader">Sound Invader</button>
-            <button class="menu-btn" id="btnSelectCatch">Aqua Catch</button>
-            <button class="menu-btn" id="btnSelectTree">Yggdrasil</button>
+            <div class="menu-row active" data-game="invader">
+                <span class="menu-pointer">▶</span><span class="menu-text">Sound Invader</span>
+            </div>
+            <div class="menu-row" data-game="catch">
+                <span class="menu-pointer">▶</span><span class="menu-text">Aqua Catch</span>
+            </div>
+            <div class="menu-row" data-game="tree">
+                <span class="menu-pointer">▶</span><span class="menu-text">Yggdrasil</span>
+            </div>
         </div>
         
         <canvas id="gameCanvas" width="400" height="500"></canvas>
@@ -190,9 +230,59 @@
         let dataArray = null;
         let audioStream = null;
 
-        function hideMenu() {
+        // --- 📱 スマートタップ選択システム ---
+        const menuRows = document.querySelectorAll('.menu-row');
+        let selectedIndex = 0;
+
+        menuRows.forEach((row, idx) => {
+            // タップ（クリック）時の挙動
+            row.onclick = (e) => {
+                e.preventDefault();
+                
+                // すでに▶がついている項目をもう一度タップしたら、そのゲームを開始（決定）
+                if (selectedIndex === idx) {
+                    executeGameStart(idx);
+                } else {
+                    // 違う項目をタップした場合は、そこに「▶」を移動させる
+                    menuRows[selectedIndex].classList.remove('active');
+                    row.classList.add('active');
+                    selectedIndex = idx;
+                }
+            };
+        });
+
+        // PCデバッグ用のキーボード操作（上下で▶移動、Enterで決定）
+        window.addEventListener('keydown', (e) => {
+            if (menuContainer.style.display === 'none') return;
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                menuRows[selectedIndex].classList.remove('active');
+                selectedIndex = (selectedIndex + 1) % menuRows.length;
+                menuRows[selectedIndex].classList.add('active');
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                menuRows[selectedIndex].classList.remove('active');
+                selectedIndex = (selectedIndex - 1 + menuRows.length) % menuRows.length;
+                menuRows[selectedIndex].classList.add('active');
+            }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                executeGameStart(selectedIndex);
+            }
+        });
+
+        function executeGameStart(index) {
             menuContainer.style.display = 'none';
+            // ゲーム画面内の文字崩れを防ぐため、標準フォントに切り替え
+            document.body.style.fontFamily = "sans-serif";
+            
+            if (index === 0) runInvaderGame();
+            else if (index === 1) runCatchGame();
+            else if (index === 2) runTreeGame();
         }
+
 
         // =========================================================================
         // 🎮 1. SOUND INVADER
@@ -218,7 +308,6 @@
             let moveLeft = false, moveRight = false;
             let voiceDuration = 0, isBeaming = false, invaderSpawnTimer = 0, hasBossSpawned = false;
 
-            // 🚀 スマホで確実に反応するようイベントを最適化
             const setBtnEvent = (btn, startFlag, endFlag) => {
                 btn.onmousedown = (e) => { e.preventDefault(); startFlag(); };
                 btn.onmouseup = (e) => { e.preventDefault(); endFlag(); };
@@ -361,7 +450,6 @@
 
             function endGame() {
                 isGameOver = true; clearInterval(timerInterval); drawGame();
-                window.removeEventListener('keydown', keyHandlerDown); window.removeEventListener('keyup', keyHandlerUp);
                 if (audioStream) audioStream.getTracks().forEach(track => track.stop());
                 if (audioContext) audioContext.close();
             }
@@ -393,7 +481,6 @@
             const moveLeft = () => { if (!isPlaying || isGameOver || isCountingDown) return; if (currentLaneIndex > 0) { currentLaneIndex--; checkImmediateCatch(); } };
             const moveRight = () => { if (!isPlaying || isGameOver || isCountingDown) return; if (currentLaneIndex < 2) { currentLaneIndex++; checkImmediateCatch(); } };
 
-            // スマホイベント
             leftBtn.onmousedown = (e) => { e.preventDefault(); moveLeft(); };
             leftBtn.ontouchstart = (e) => { e.preventDefault(); moveLeft(); };
             rightBtn.onmousedown = (e) => { e.preventDefault(); moveRight(); };
@@ -527,7 +614,7 @@
                 }
             }
 
-            function endGame() { isGameOver = true; clearInterval(timerInterval); drawGame(); window.removeEventListener('keydown', keyHandler); }
+            function endGame() { isGameOver = true; clearInterval(timerInterval); drawGame(); }
         }
 
         // =========================================================================
@@ -615,20 +702,6 @@
 
             function endGame() { isGameOver = true; clearInterval(timerInterval); drawGame(); cancelAnimationFrame(animId); if (audioStream) audioStream.getTracks().forEach(t => t.stop()); if (audioContext) audioContext.close(); }
         }
-
-        // 🚀 【重要】メニュー選択ボタンの反応をスマホ用に超強化（clickイベントに統一し競合排除）
-        const bindMenuButton = (btnId, gameFunc) => {
-            const btn = document.getElementById(btnId);
-            btn.onclick = (e) => {
-                e.preventDefault(); // イベントの重複発火を防止
-                hideMenu();
-                gameFunc();
-            };
-        };
-
-        bindMenuButton('btnSelectInvader', runInvaderGame);
-        bindMenuButton('btnSelectCatch', runCatchGame);
-        bindMenuButton('btnSelectTree', runTreeGame);
     </script>
 </body>
 </html>
