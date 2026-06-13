@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D音声リズムゲーム（高音判定緩和＆大輪淡光花火版）</title>
+    <title>3D音声リズムゲーム（444Hz厳守・高音パワー判定版）</title>
     <style>
         body {
             margin: 0;
@@ -46,7 +46,7 @@
 </head>
 <body>
 
-    <div id="info">【境界線を300Hzに緩和！】少し高めの声や音で上が反応します。花火の淡い光もボリュームアップ！🎆</div>
+    <div id="info">【444Hz厳守】高音成分をダイレクトに検知！ピンクのリングが確実に反応します。</div>
     <button id="startBtn">ゲームスタート</button>
     <canvas id="gameCanvas" width="400" height="500"></canvas>
 
@@ -77,7 +77,8 @@
         let hitEffects = [];
         let fireworks = [];
 
-        let lastVolume = 0;
+        let lastHighPower = 0;
+        let lastLowPower = 0;
         let inputCooldown = 0;
 
         startBtn.addEventListener('click', async () => {
@@ -126,44 +127,51 @@
             if (!analyser) return;
             analyser.getByteFrequencyData(dataArray);
             
-            let maxVal = 0;
-            let maxIndex = 0;
             const hzPerBucket = audioContext.sampleRate / analyser.fftSize;
 
+            let highSum = 0; // 444Hz以上のパワー合計
+            let lowSum = 0;  // 444Hz未満のパワー合計
+            let highCount = 0;
+            let lowCount = 0;
+
             for (let i = 0; i < dataArray.length; i++) {
-                let val = dataArray[i];
                 let currentHz = i * hzPerBucket;
-
-                // 低音域の過剰なブーストを抑え、純粋に高い周波数が勝てるように調整
-                if (currentHz < 300) {
-                    val = val * 1.1; 
-                }
-
-                if (val > maxVal) {
-                    maxVal = val;
-                    maxIndex = i; 
+                if (currentHz >= 444) {
+                    highSum += dataArray[i];
+                    highCount++;
+                } else if (currentHz > 60) { // 60Hz以下のノイズは除外
+                    lowSum += dataArray[i];
+                    lowCount++;
                 }
             }
 
-            let currentVolume = maxVal;
-            const threshold = 35; 
+            // 平均パワーに変換
+            let avgHigh = highCount > 0 ? highSum / highCount : 0;
+            let avgLow = lowCount > 0 ? lowSum / lowCount : 0;
 
             if (inputCooldown > 0) inputCooldown--;
 
-            let volumeSpike = currentVolume - lastVolume;
+            // ⭐【新判定システム】ピーク（1点）ではなく、444Hz以上のエリア全体の音の立ち上がりを検知！
+            let highSpike = avgHigh - lastHighPower;
+            let lowSpike = avgLow - lastLowPower;
 
-            if (currentVolume > threshold && volumeSpike > 12 && inputCooldown === 0) {
-                const peakHz = maxIndex * hzPerBucket;
-                
-                // ⭐【修正】高音と認める境界線を「300Hz」に下げました。
-                // 人の声の「高い方の成分」や、楽器の音が、劇的に「高音（上）」へ判定されやすくなります！
-                let isHighPitch = peakHz >= 300;
+            const minThreshold = 12; // 反応する最低限のパワー
 
-                checkJudgment(isHighPitch); 
-                inputCooldown = 12; 
+            if (inputCooldown === 0) {
+                // 1. まず何より「444Hz以上の高音」が立ち上がったかを最優先でチェック！
+                if (avgHigh > minThreshold && highSpike > 6) {
+                    checkJudgment(true); // 高音確定！
+                    inputCooldown = 12;
+                } 
+                // 2. 高音が出ていなくて、低音だけが立ち上がった場合は低音判定
+                else if (avgLow > minThreshold && lowSpike > 6) {
+                    checkJudgment(false); // 低音確定
+                    inputCooldown = 12;
+                }
             }
 
-            lastVolume = currentVolume; 
+            lastHighPower = avgHigh;
+            lastLowPower = avgLow;
         }
 
         function updateGame() {
@@ -197,7 +205,7 @@
                 fw.delay--;
                 if (fw.delay <= 0) {
                     fw.state = "explode";
-                    fw.alpha -= 0.022; // ゆったり消えるように少しだけ生存時間を延長
+                    fw.alpha -= 0.022; 
                     fw.radius += fw.expandSpeed; 
                     fw.expandSpeed *= 0.95; 
                 }
@@ -276,25 +284,22 @@
             ctx.fillStyle = '#020206';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // ⭐【修正】花火の外側のカラー円まで、淡い光のオーラが大きく広がるように描画を強化！
+            // 淡いオーラが大輪に広がる花火の描画
             fireworks.forEach(fw => {
                 if (fw.state === "explode") {
                     ctx.save();
                     ctx.globalAlpha = fw.alpha;
                     
-                    // 1. まず、輪っかの外側を包み込むような「超広範囲の淡い光の衣（ぼかし）」を描く
-                    ctx.shadowBlur = fw.radius * 1.2; // 輪っかの大きさに比例して発光が広がる
+                    ctx.shadowBlur = fw.radius * 1.4; // さらに光が外側まで広がるようにブースト
                     ctx.shadowColor = fw.color;
                     
-                    // 2. メインの綺麗なパステルカラーの円の線
                     ctx.strokeStyle = fw.color;
-                    ctx.lineWidth = 2.2; // 少しだけ線を太くして発光の存在感をUP
+                    ctx.lineWidth = 2.5; 
                     ctx.beginPath(); 
                     ctx.arc(fw.x, fw.y, fw.radius, 0, Math.PI * 2); 
                     ctx.stroke();
                     
-                    // 3. 中心の淡い白い核
-                    ctx.fillStyle = "rgba(255,255,255,0.8)";
+                    ctx.fillStyle = "rgba(255,255,255,0.85)";
                     ctx.beginPath(); 
                     ctx.arc(fw.x, fw.y, fw.radius * 0.1, 0, Math.PI * 2); 
                     ctx.fill();
@@ -311,7 +316,7 @@
             ctx.moveTo(centerX, centerY); ctx.lineTo(centerX, judgeLowY);
             ctx.stroke();
 
-            // 🎯 判定リング
+            // 🎯 判定リング（上がピンク、下が青）
             ctx.strokeStyle = 'rgba(255, 0, 150, 0.35)';
             ctx.lineWidth = 4;
             ctx.beginPath(); ctx.arc(centerX, judgeHighY, targetRadius, 0, Math.PI * 2); ctx.stroke();
