@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>にふなみ - 動画保存中ミニゲーム選択</title>
+    <title>にふなみ - 動画保存中ミニゲーム</title>
     <style>
         /* --- 🌐 全体共通スタイル --- */
         body {
@@ -15,41 +15,26 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            /* 画面サイズ問題の解決策：絶対に親枠をはみ出さない設定 */
+            width: 100vw;
             height: 100vh;
             overflow: hidden;
             user-select: none;
-            touch-action: none; /* 📱 画面全体の無駄なズームやスクロールを徹底禁止 */
+            touch-action: none;
         }
-        .header-zone {
-            text-align: center;
-            width: 100%;
-            margin-bottom: 10px;
-        }
-        
+
         .universal-container {
             display: flex;
             flex-direction: column;
             align-items: center;
+            width: 100%;
             max-width: 100%;
         }
-        .title {
-            font-size: 1.1rem; 
-            letter-spacing: 2px;
-            margin-bottom: 5px;
-        }
-        
-        .decoration-line {
-            font-size: 0.65rem;
-            opacity: 0.7;
-            white-space: nowrap;
-            line-height: 1.5;
-        }
-
 
         #info {
-            font-size: 13px;
+            font-size: 15px;
             color: #e0ffff;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             text-align: center;
             padding: 0 20px;
             line-height: 1.6;
@@ -60,16 +45,16 @@
         #menuContainer {
             display: flex;
             flex-direction: column;
-            gap: 20px;
-            width: 280px;
+            gap: 15px;
+            width: 80%;
+            max-width: 280px;
             margin-top: 10px;
         }
         
-        /* 選択肢全体のタップエリア（触れたら即反応） */
         .menu-row {
             display: flex;
             align-items: center;
-            justify-content: center; /* 中央寄せにしてスッキリ配置 */
+            justify-content: center;
             font-size: 18px;
             letter-spacing: 0.05em;
             cursor: pointer;
@@ -81,32 +66,61 @@
             -webkit-tap-highlight-color: transparent;
         }
         
-        /* 指が触れた瞬間のフィードバック効果（にふなみテイスト） */
         .menu-row:active {
             background: rgba(255, 255, 255, 0.12);
             border-color: rgba(255, 255, 255, 0.3);
         }
         
-        /* 文字の色（デフォルト） */
         .menu-text {
             color: #fff;
             transition: color 0.15s, text-shadow 0.15s;
         }
 
-        /* 触れた瞬間に各テーマカラーがほんのり発光 */
         .menu-row[data-game="invader"]:active .menu-text { color: #0fa; text-shadow: 0 0 8px rgba(0,255,170,0.4); }
         .menu-row[data-game="catch"]:active .menu-text { color: #00d2ff; text-shadow: 0 0 8px rgba(0,210,255,0.4); }
         .menu-row[data-game="tree"]:active .menu-text { color: #e1bee7; text-shadow: 0 0 8px rgba(225,190,231,0.4); }
 
-        /* --- 🖼️ キャンバス表示制御 --- */
+        /* --- 🖼️ キャンバス表示制御（サイズ崩れ防止の要） --- */
         #gameCanvas {
             background-color: #000;
-            max-width: 100%;
-            max-height: 60vh;
             display: none;
+            /* 画面比率を保ったまま、スマホ画面に100%フィットさせる魔法 */
+            width: 95vw;
+            max-width: 400px;
+            aspect-ratio: 4 / 5;
+            height: auto; 
+            max-height: 60vh;
         }
         .border-invader { border: 2px solid #555; }
         .border-catch { border: 2px solid #223; box-shadow: 0 0 25px rgba(0,255,255,0.08); }
+
+        /* --- 🌳 世界樹ゲーム用特殊コンテナ --- */
+        .tree-game-container {
+            display: none;
+            position: relative;
+            background-color: #020205;
+            border-radius: 8px;
+            overflow: hidden;
+            /* こちらも正方形の比率を保って自動リサイズ */
+            width: 90vw;
+            max-width: 450px;
+            aspect-ratio: 1 / 1;
+            height: auto;
+            max-height: 60vh;
+        }
+        #treeImg {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: contain;
+            opacity: 0.6; z-index: 1;
+        }
+        #treeCanvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 2; pointer-events: none;
+        }
 
         /* --- 🕹️ ゲームプレイ時操作ボタンエリア --- */
         .controls-area {
@@ -131,80 +145,52 @@
             touch-action: manipulation;
             -webkit-tap-highlight-color: transparent;
         }
-        .btn-move:active {
-            background-color: #555;
-        }
+        .btn-move:active { background-color: #555; }
         .btn-catch-style {
             background: linear-gradient(135deg, #0f2042 0%, #061026 100%);
-            border: 2px solid #00d2ff;
-            color: #00d2ff;
-            height: 55px;
-            font-size: 18px;
-            border-radius: 12px;
+            border: 2px solid #00d2ff; color: #00d2ff;
+            height: 55px; font-size: 18px; border-radius: 12px;
             box-shadow: 0 0 10px rgba(0,210,255,0.3);
         }
-        .btn-catch-style:active {
-            background: #00d2ff;
-            color: #03030a;
-            box-shadow: 0 0 20px rgba(0,210,255,0.6);
-        }
+        .btn-catch-style:active { background: #00d2ff; color: #03030a; box-shadow: 0 0 20px rgba(0,210,255,0.6); }
 
-        /* --- 🌳 世界樹ゲーム用特殊コンテナ --- */
-        .tree-game-container {
+        /* --- 🚪 リザルト画面＆閉じるボタン --- */
+        #closeBtnContainer {
             display: none;
-            position: relative;
-            width: 450px;
-            height: 450px;
-            max-width: 90vw;
-            max-height: 60vh;
-            background-color: #020205;
+            position: absolute;
+            bottom: 5vh;
+            width: 100%;
+            text-align: center;
+            z-index: 1000;
+        }
+        #closeResultBtn {
+            padding: 15px 30px;
+            font-size: 16px;
+            font-family: 'Cinecaption', 'Courier New', sans-serif;
             border-radius: 8px;
-            overflow: hidden;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 2px solid #fff;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            backdrop-filter: blur(5px);
+            transition: all 0.2s;
         }
-        #treeImg {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            opacity: 0.6; 
-            z-index: 1;
-        }
-        #treeCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 2;
-            pointer-events: none;
+        #closeResultBtn:active {
+            background: #fff;
+            color: #000;
         }
     </style>
 </head>
 <body>
-  <div class="header-zone">
-    <div class="universal-container">
-              <div class="title">2min VOICE and MUSIC WAVE MOVIE</div>
-        <div class="decoration-line">。.：★*・゜꙳☄︎・✧.・☆.*Ø・*★*.✧.・☆.*Ø・.・。</div>
 
-        <br>
-        
-        <div id="info">・・・保存待ち時間中・・・<br>ミニゲームを選んでね！
-        </div>
+    <div class="universal-container">
+        <div id="info">・・・保存待ち時間中・・・<br>ミニゲームを選んでね！</div>
         
         <div id="menuContainer">
-            <div class="menu-row" data-game="invader">
-                <span class="menu-text">Sound Invader</span>
-            </div>
-            <div class="menu-row" data-game="catch">
-                <span class="menu-text">Aqua Catch</span>
-            </div>
-            <div class="menu-row" data-game="tree">
-                <span class="menu-text">Yggdrasil</span>
-            </div>
-        </div> 
-             
+            <div class="menu-row" data-game="invader"><span class="menu-text">Sound Invader</span></div>
+            <div class="menu-row" data-game="catch"><span class="menu-text">Aqua Catch</span></div>
+            <div class="menu-row" data-game="tree"><span class="menu-text">Yggdrasil</span></div>
         </div>
         
         <canvas id="gameCanvas" width="400" height="500"></canvas>
@@ -220,6 +206,10 @@
         </div>
     </div>
 
+    <div id="closeBtnContainer">
+        <button id="closeResultBtn">結果を閉じてメインへ戻る</button>
+    </div>
+
     <script>
         const info = document.getElementById('info');
         const menuContainer = document.getElementById('menuContainer');
@@ -228,39 +218,38 @@
         const controlsBlock = document.getElementById('controlsBlock');
         const leftBtn = document.getElementById('leftBtn');
         const rightBtn = document.getElementById('rightBtn');
+        const closeBtnContainer = document.getElementById('closeBtnContainer');
 
         let audioContext = null;
         let analyser = null;
         let dataArray = null;
         let audioStream = null;
 
+        // --- 🚪「結果を閉じる」ボタンの処理 ---
+        document.getElementById('closeResultBtn').addEventListener('click', () => {
+            // 念のためここでもマイクとオーディオを完全に停止して解放
+            if (audioStream) audioStream.getTracks().forEach(track => track.stop());
+            if (audioContext && audioContext.state !== 'closed') audioContext.close();
+            
+            // 親ウィンドウ（にふなみ本体）へ「終わったよ」の合図を送る
+            window.parent.postMessage('MINIGAME_FINISHED', '*');
+        });
+
         // --- 📱 即時起動対応・ダイレクトタップシステム ---
         const menuRows = document.querySelectorAll('.menu-row');
-
         menuRows.forEach((row, idx) => {
-            // スマホでの「触れた瞬間」の超高速レスポンスに対応
-            row.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                executeGameStart(idx);
-            });
-
-            // PCブラウザでのデバッグ用マウスクリック
-            row.addEventListener('click', (e) => {
-                e.preventDefault();
-                executeGameStart(idx);
-            });
+            row.addEventListener('touchstart', (e) => { e.preventDefault(); executeGameStart(idx); });
+            row.addEventListener('click', (e) => { e.preventDefault(); executeGameStart(idx); });
         });
 
         function executeGameStart(index) {
             menuContainer.style.display = 'none';
-            // ゲーム画面内の描画崩れを防ぐため、ゲーム中のフォントをシステム標準にリセット
             document.body.style.fontFamily = "sans-serif";
             
             if (index === 0) runInvaderGame();
             else if (index === 1) runCatchGame();
             else if (index === 2) runTreeGame();
         }
-
 
         // =========================================================================
         // 🎮 1. SOUND INVADER
@@ -269,13 +258,10 @@
             info.innerHTML = "👾をやっつけて！<br>ロングトーンでビーム発射！";
             gameCanvas.style.display = "block";
             gameCanvas.className = "border-invader";
-            gameCanvas.height = 500;
             controlsBlock.style.display = "flex";
 
-            leftBtn.className = "btn-move";
-            rightBtn.className = "btn-move";
-            leftBtn.innerText = "◀";
-            rightBtn.innerText = "▶";
+            leftBtn.className = "btn-move"; rightBtn.className = "btn-move";
+            leftBtn.innerText = "◀"; rightBtn.innerText = "▶";
 
             const ctx = gameCanvas.getContext('2d');
             let isPlaying = false, isGameOver = false, isCountingDown = false, countdownNumber = 3;
@@ -295,11 +281,6 @@
             };
             setBtnEvent(leftBtn, () => moveLeft = true, () => moveLeft = false);
             setBtnEvent(rightBtn, () => moveRight = true, () => moveRight = false);
-
-            const keyHandlerDown = (e) => { if (e.key === 'ArrowLeft') moveLeft = true; if (e.key === 'ArrowRight') moveRight = true; };
-            const keyHandlerUp = (e) => { if (e.key === 'ArrowLeft') moveLeft = false; if (e.key === 'ArrowRight') moveRight = false; };
-            window.addEventListener('keydown', keyHandlerDown);
-            window.addEventListener('keyup', keyHandlerUp);
 
             startCountdown();
             initAudio();
@@ -353,13 +334,8 @@
                 let volume = total / dataArray.length;
                 if (volume > 15) {
                     voiceDuration++; if (voiceDuration > 15) isBeaming = true;
-                    if (isBeaming) {
-                        bullets.push({ x: player.x, y: player.y - 10, width: Math.min(volume * 0.6, 50), height: 25, speed: 15, color: '#f0f', isBeam: true });
-                    } else {
-                        if (voiceDuration % 3 === 1) {
-                            bullets.push({ x: player.x, y: player.y - 10, radius: Math.min(volume * 0.4, 30), speed: 9, color: '#0fa', isBeam: false });
-                        }
-                    }
+                    if (isBeaming) { bullets.push({ x: player.x, y: player.y - 10, width: Math.min(volume * 0.6, 50), height: 25, speed: 15, color: '#f0f', isBeam: true }); } 
+                    else { if (voiceDuration % 3 === 1) bullets.push({ x: player.x, y: player.y - 10, radius: Math.min(volume * 0.4, 30), speed: 9, color: '#0fa', isBeam: false }); }
                 } else { voiceDuration = 0; isBeaming = false; }
             }
 
@@ -421,15 +397,18 @@
                 ctx.textAlign = 'right'; ctx.fillText(`TIME: ${timeLeft}s`, gameCanvas.width - 15, 30);
                 if (isGameOver) {
                     ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'; ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
-                    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '24px sans-serif'; ctx.fillText('ゲーム終了！', gameCanvas.width / 2, gameCanvas.height / 2 - 20);
-                    ctx.fillStyle = '#0fa'; ctx.font = '22px sans-serif'; ctx.fillText(`最終スコア: ${score}`, gameCanvas.width / 2, gameCanvas.height / 2 + 30);
+                    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '24px sans-serif'; ctx.fillText('ゲーム終了！', gameCanvas.width / 2, gameCanvas.height / 2 - 40);
+                    ctx.fillStyle = '#0fa'; ctx.font = '22px sans-serif'; ctx.fillText(`最終スコア: ${score}`, gameCanvas.width / 2, gameCanvas.height / 2 + 10);
                 }
             }
 
+            // 🛑 ゲーム終了処理
             function endGame() {
                 isGameOver = true; clearInterval(timerInterval); drawGame();
                 if (audioStream) audioStream.getTracks().forEach(track => track.stop());
-                if (audioContext) audioContext.close();
+                if (audioContext && audioContext.state !== 'closed') audioContext.close();
+                // リザルトを少し見せてから、戻るボタンを表示する
+                setTimeout(() => { closeBtnContainer.style.display = 'block'; }, 800);
             }
         }
 
@@ -440,13 +419,10 @@
             info.innerHTML = "左右ボタンで白い丸を動かして<br>降ってくるノーツをキャッチ！";
             gameCanvas.style.display = "block";
             gameCanvas.className = "border-catch";
-            gameCanvas.height = 480;
             controlsBlock.style.display = "flex";
 
-            leftBtn.className = "btn-move btn-catch-style";
-            rightBtn.className = "btn-move btn-catch-style";
-            leftBtn.innerText = "◀";
-            rightBtn.innerText = "▶";
+            leftBtn.className = "btn-move btn-catch-style"; rightBtn.className = "btn-move btn-catch-style";
+            leftBtn.innerText = "◀"; rightBtn.innerText = "▶";
 
             const ctx = gameCanvas.getContext('2d');
             let isPlaying = false, isGameOver = false, isCountingDown = false, countdownNumber = 3;
@@ -459,13 +435,8 @@
             const moveLeft = () => { if (!isPlaying || isGameOver || isCountingDown) return; if (currentLaneIndex > 0) { currentLaneIndex--; checkImmediateCatch(); } };
             const moveRight = () => { if (!isPlaying || isGameOver || isCountingDown) return; if (currentLaneIndex < 2) { currentLaneIndex++; checkImmediateCatch(); } };
 
-            leftBtn.onmousedown = (e) => { e.preventDefault(); moveLeft(); };
-            leftBtn.ontouchstart = (e) => { e.preventDefault(); moveLeft(); };
-            rightBtn.onmousedown = (e) => { e.preventDefault(); moveRight(); };
-            rightBtn.ontouchstart = (e) => { e.preventDefault(); moveRight(); };
-
-            const keyHandler = (e) => { if (e.key === "ArrowLeft") moveLeft(); if (e.key === "ArrowRight") moveRight(); };
-            window.addEventListener('keydown', keyHandler);
+            leftBtn.onmousedown = (e) => { e.preventDefault(); moveLeft(); }; leftBtn.ontouchstart = (e) => { e.preventDefault(); moveLeft(); };
+            rightBtn.onmousedown = (e) => { e.preventDefault(); moveRight(); }; rightBtn.ontouchstart = (e) => { e.preventDefault(); moveRight(); };
 
             startCountdown();
 
@@ -587,12 +558,17 @@
 
                 if (isGameOver) {
                     ctx.fillStyle = 'rgba(1, 1, 5, 0.93)'; ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
-                    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '24px sans-serif'; ctx.fillText('タイムアップ！', gameCanvas.width / 2, gameCanvas.height / 2 - 30);
-                    ctx.fillStyle = '#00ffff'; ctx.font = 'bold 26px sans-serif'; ctx.fillText(`最終スコア: ${score}`, gameCanvas.width / 2, gameCanvas.height / 2 + 20);
+                    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '24px sans-serif'; ctx.fillText('タイムアップ！', gameCanvas.width / 2, gameCanvas.height / 2 - 40);
+                    ctx.fillStyle = '#00ffff'; ctx.font = 'bold 26px sans-serif'; ctx.fillText(`最終スコア: ${score}`, gameCanvas.width / 2, gameCanvas.height / 2 + 10);
                 }
             }
 
-            function endGame() { isGameOver = true; clearInterval(timerInterval); drawGame(); }
+            // 🛑 ゲーム終了処理
+            function endGame() {
+                isGameOver = true; clearInterval(timerInterval); drawGame();
+                // 戻るボタンを表示する
+                setTimeout(() => { closeBtnContainer.style.display = 'block'; }, 800);
+            }
         }
 
         // =========================================================================
@@ -648,12 +624,7 @@
                 let total = 0; for (let i = 0; i < dataArray.length; i++) total += dataArray[i];
                 let currentVolume = total / dataArray.length;
 
-                // 🎤 判定基準を 5 まで大幅ダウンし、少しの音でも検知可能に
-                if (currentVolume > 5) { 
-                    // 加算効率も引き上げ、開花をスムーズに
-                    bloomProgress += 0.0035; 
-                    if (bloomProgress > 1.1) bloomProgress = 1.1; 
-                }
+                if (currentVolume > 5) { bloomProgress += 0.0035; if (bloomProgress > 1.1) bloomProgress = 1.1; }
             }
 
             function drawGame() {
@@ -675,17 +646,24 @@
                         }
                     });
                     let displayPercent = Math.min(100, Math.floor(bloomProgress * 100));
-                    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = '16px sans-serif'; ctx.textAlign = 'left'; ctx.fillText(`世界樹の開花度: ${displayPercent}%`, 20, 35);
+                    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = '16px sans-serif'; ctx.textAlign = 'left'; ctx.fillText(`開花度: ${displayPercent}%`, 20, 35);
                     ctx.textAlign = 'right'; ctx.fillText(`TIME: ${timeLeft}s`, canvas.width - 20, 35);
                     if (isGameOver) {
                         ctx.fillStyle = 'rgba(2, 2, 6, 0.95)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-                        ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '20px sans-serif'; ctx.fillText('時の砂が尽きました', canvas.width / 2, canvas.height / 2 - 25);
-                        ctx.fillStyle = '#e1bee7'; ctx.font = 'bold 24px sans-serif'; ctx.fillText(`最終開花度: ${displayPercent}%`, canvas.width / 2, canvas.height / 2 + 25);
+                        ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '20px sans-serif'; ctx.fillText('時の砂が尽きました', canvas.width / 2, canvas.height / 2 - 35);
+                        ctx.fillStyle = '#e1bee7'; ctx.font = 'bold 24px sans-serif'; ctx.fillText(`最終開花度: ${displayPercent}%`, canvas.width / 2, canvas.height / 2 + 5);
                     }
                 }
             }
 
-            function endGame() { isGameOver = true; clearInterval(timerInterval); drawGame(); cancelAnimationFrame(animId); if (audioStream) audioStream.getTracks().forEach(t => t.stop()); if (audioContext) audioContext.close(); }
+            // 🛑 ゲーム終了処理
+            function endGame() {
+                isGameOver = true; clearInterval(timerInterval); drawGame(); cancelAnimationFrame(animId);
+                if (audioStream) audioStream.getTracks().forEach(t => t.stop());
+                if (audioContext && audioContext.state !== 'closed') audioContext.close();
+                // 戻るボタンを表示する
+                setTimeout(() => { closeBtnContainer.style.display = 'block'; }, 800);
+            }
         }
     </script>
 </body>
