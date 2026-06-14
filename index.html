@@ -516,7 +516,7 @@
     <div id="renderOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
         <h2 style="color: #ff4488; margin-bottom: 5px; font-size: 1.2rem; letter-spacing: 2px;">MOVIE SAVING...</h2>
         <p style="margin-bottom: 15px; font-size: 0.75rem; opacity: 0.9; text-align: center;">⚠️ このタブを開いたままお待ちください<br>（別タブを開くとエラーになることがあります）</p>
-        <iframe src="mini-game.html" style="width: 90%; max-width: 400px; height: 50vh; border: 2px solid rgba(255,255,255,0.2); border-radius: 10px; background: #000;"></iframe>
+        <iframe id="miniGameIframe" src="mini-game.html" style="width: 90%; max-width: 400px; height: 50vh; border: 2px solid rgba(255,255,255,0.2); border-radius: 10px; background: #000;"></iframe>
     </div>
 
     <script>
@@ -1014,8 +1014,10 @@
                 return;
             }
 
-            // オーバーレイを表示して操作をロック
+            // オーバーレイを表示して操作をロックし、ミニゲームをリセット
             document.getElementById('renderOverlay').style.display = 'flex';
+            document.getElementById('miniGameIframe').src = 'mini-game.html';
+            
             downloadBtn.style.pointerEvents = 'none';
 
             const renderAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
