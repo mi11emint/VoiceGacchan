@@ -79,16 +79,15 @@
         .menu-row[data-game="catch"]:active .menu-text { color: #00d2ff; text-shadow: 0 0 8px rgba(0,210,255,0.4); }
         .menu-row[data-game="tree"]:active .menu-text { color: #e1bee7; text-shadow: 0 0 8px rgba(225,190,231,0.4); }
 
-        /* --- 🖼️ キャンバス表示制御（🌟サイズ潰れ防止の要🌟） --- */
+        /* --- 🖼️ キャンバス表示制御 --- */
         #gameCanvas {
             background-color: #000;
             display: none;
             width: 100%;
-            /* 画面幅、高さ限界、元のサイズの３つから一番安全なものを自動選択 */
             max-width: min(95vw, calc(55vh * 0.8), 400px); 
             aspect-ratio: 4 / 5;
             height: auto;
-            flex-shrink: 0; /* Flexboxによる強制縮小を完全にブロック */
+            flex-shrink: 0; 
         }
         .border-invader { border: 2px solid #555; }
         .border-catch { border: 2px solid #223; box-shadow: 0 0 25px rgba(0,255,255,0.08); }
@@ -398,7 +397,6 @@
                 }
             }
 
-            // 🛑 ゲーム終了処理
             function endGame() {
                 isGameOver = true; clearInterval(timerInterval); drawGame();
                 if (audioStream) audioStream.getTracks().forEach(track => track.stop());
@@ -408,10 +406,10 @@
         }
 
         // =========================================================================
-        // 🎮 2. AQUA CATCH
+        // 🎮 2. AQUA CATCH（🌟効果音ラボ・外部音源再生版🌟）
         // =========================================================================
         function runCatchGame() {
-            info.innerHTML = "左右ボタンで白い丸を動かして<br>降ってくるノーツをキャッチ！";
+            info.innerHTML = "左右ボタンで白い丸を動かしてノーツをキャッチ！<br>綺麗に重なると、みずみずしい「ぽちゃん！」の音が鳴るよ💧";
             gameCanvas.style.display = "block";
             gameCanvas.className = "border-catch";
             controlsBlock.style.display = "flex";
@@ -420,6 +418,11 @@
             leftBtn.innerText = "◀"; rightBtn.innerText = "▶";
 
             const ctx = gameCanvas.getContext('2d');
+            
+            // 🔊 外部音声ファイル（効果音ラボのmp3）を事前に読み込む
+            const soundGreat = new Audio('./water-great.mp3');
+            const soundGood = new Audio('./water-good.mp3');
+
             let isPlaying = false, isGameOver = false, isCountingDown = false, countdownNumber = 3;
             let score = 0, combo = 0, timeLeft = 30, timerInterval;
 
@@ -427,11 +430,39 @@
             const lanes = [100, 200, 300]; let currentLaneIndex = 1;
             let notes = [], nextSpawnCountdown = 0, splashEffects = [], fireworks = [];
 
+            function initCatchAudio() {
+                // 外部ファイル再生のため、ここは空関数にしています
+            }
+
+            // 「ぽちゃん！」という水音を鳴らすロジック（外部ファイル再生）
+            function playWaterSound(isGreat) {
+                try {
+                    if (isGreat) {
+                        // cloneNode()により、連続で音が重なってもプチプチ途切れずに再生されます
+                        soundGreat.cloneNode().play().catch(e => console.log(e));
+                    } else {
+                        soundGood.cloneNode().play().catch(e => console.log(e));
+                    }
+                } catch (e) {
+                    console.log("Audio Error:", e);
+                }
+            }
+
             const moveLeft = () => { if (!isPlaying || isGameOver || isCountingDown) return; if (currentLaneIndex > 0) { currentLaneIndex--; checkImmediateCatch(); } };
             const moveRight = () => { if (!isPlaying || isGameOver || isCountingDown) return; if (currentLaneIndex < 2) { currentLaneIndex++; checkImmediateCatch(); } };
 
-            leftBtn.onmousedown = (e) => { e.preventDefault(); moveLeft(); }; leftBtn.ontouchstart = (e) => { e.preventDefault(); moveLeft(); };
-            rightBtn.onmousedown = (e) => { e.preventDefault(); moveRight(); }; rightBtn.ontouchstart = (e) => { e.preventDefault(); moveRight(); };
+            leftBtn.onmousedown = (e) => { e.preventDefault(); moveLeft(); }; 
+            leftBtn.ontouchstart = (e) => { e.preventDefault(); moveLeft(); };
+            rightBtn.onmousedown = (e) => { e.preventDefault(); moveRight(); }; 
+            rightBtn.ontouchstart = (e) => { e.preventDefault(); moveRight(); };
+
+            // PCキーボードテスト用サポート
+            window.addEventListener('keydown', (e) => {
+                if (gameCanvas.className === "border-catch" && isPlaying) {
+                    if (e.key === "ArrowLeft") moveLeft();
+                    if (e.key === "ArrowRight") moveRight();
+                }
+            });
 
             startCountdown();
 
@@ -498,11 +529,22 @@
                 for(let i=0; i<notes.length; i++) { if(notes[i].lane === activeLane && notes[i].progress > maxProgress) { maxProgress = notes[i].progress; targetIndex = i; } }
                 if (targetIndex === -1) return;
                 let note = notes[targetIndex], diff = Math.abs(note.progress - 1.0), currentX = lanes[note.lane], currentY = judgeLowY;
-                if (diff < 0.12) {
-                    splashEffects.push({ x: currentX, y: currentY, radius1: 5, radius2: 2, dropY: currentY - 5, color: "#ffffff", colorCyan: "#00f0ff", alpha: 1.0 });
+                
+                if (diff < 0.06) {
+                    playWaterSound(true);  // GREAT用の効果音
+                    generateSplash(currentX, currentY);
                     score += 150; combo++; notes.splice(targetIndex, 1);
-                    if (combo >= 5) { triggerFireworkShow(currentX, currentY); combo = 0; }
+                } else if (diff < 0.13) {
+                    playWaterSound(false); // GOOD用の効果音
+                    generateSplash(currentX, currentY);
+                    score += 80; combo++; notes.splice(targetIndex, 1);
                 }
+
+                if (combo >= 5) { triggerFireworkShow(currentX, currentY); combo = 0; }
+            }
+
+            function generateSplash(x, y) {
+                splashEffects.push({ x: x, y: y, radius1: 5, radius2: 2, dropY: y - 5, color: "#ffffff", colorCyan: "#00f0ff", alpha: 1.0 });
             }
 
             function triggerFireworkShow(originX, originY) {
@@ -558,7 +600,6 @@
                 }
             }
 
-            // 🛑 ゲーム終了処理
             function endGame() {
                 isGameOver = true; clearInterval(timerInterval); drawGame();
                 setTimeout(() => { closeBtnContainer.style.display = 'block'; }, 800);
@@ -650,7 +691,6 @@
                 }
             }
 
-            // 🛑 ゲーム終了処理
             function endGame() {
                 isGameOver = true; clearInterval(timerInterval); drawGame(); cancelAnimationFrame(animId);
                 if (audioStream) audioStream.getTracks().forEach(t => t.stop());
