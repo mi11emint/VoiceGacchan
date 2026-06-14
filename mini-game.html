@@ -8,14 +8,13 @@
         /* --- 🌐 全体共通スタイル --- */
         body {
             margin: 0;
-            background-color: #03030a;
+            background-color: transparent; /* iframeの背景に馴染ませる */
             color: #fff;
             font-family: 'Cinecaption', 'Courier New', sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            /* 画面サイズ問題の解決策：絶対に親枠をはみ出さない設定 */
             width: 100vw;
             height: 100vh;
             overflow: hidden;
@@ -41,7 +40,7 @@
             letter-spacing: 0.05em;
         }
 
-        /* --- 📱 にふなみ動画背景選択風：スマートメニュー --- */
+        /* --- 📱 メニュー --- */
         #menuContainer {
             display: flex;
             flex-direction: column;
@@ -80,16 +79,16 @@
         .menu-row[data-game="catch"]:active .menu-text { color: #00d2ff; text-shadow: 0 0 8px rgba(0,210,255,0.4); }
         .menu-row[data-game="tree"]:active .menu-text { color: #e1bee7; text-shadow: 0 0 8px rgba(225,190,231,0.4); }
 
-        /* --- 🖼️ キャンバス表示制御（サイズ崩れ防止の要） --- */
+        /* --- 🖼️ キャンバス表示制御（🌟サイズ潰れ防止の要🌟） --- */
         #gameCanvas {
             background-color: #000;
             display: none;
-            /* 画面比率を保ったまま、スマホ画面に100%フィットさせる魔法 */
-            width: 95vw;
-            max-width: 400px;
+            width: 100%;
+            /* 画面幅、高さ限界、元のサイズの３つから一番安全なものを自動選択 */
+            max-width: min(95vw, calc(55vh * 0.8), 400px); 
             aspect-ratio: 4 / 5;
-            height: auto; 
-            max-height: 60vh;
+            height: auto;
+            flex-shrink: 0; /* Flexboxによる強制縮小を完全にブロック */
         }
         .border-invader { border: 2px solid #555; }
         .border-catch { border: 2px solid #223; box-shadow: 0 0 25px rgba(0,255,255,0.08); }
@@ -101,12 +100,11 @@
             background-color: #020205;
             border-radius: 8px;
             overflow: hidden;
-            /* こちらも正方形の比率を保って自動リサイズ */
-            width: 90vw;
-            max-width: 450px;
+            width: 100%;
+            max-width: min(95vw, 55vh, 450px);
             aspect-ratio: 1 / 1;
             height: auto;
-            max-height: 60vh;
+            flex-shrink: 0;
         }
         #treeImg {
             position: absolute;
@@ -131,6 +129,7 @@
             margin-top: 15px;
             padding: 0 10px;
             box-sizing: border-box;
+            flex-shrink: 0;
         }
         .btn-move {
             width: 45%;
@@ -158,10 +157,11 @@
         #closeBtnContainer {
             display: none;
             position: absolute;
-            bottom: 5vh;
+            bottom: 3vh;
             width: 100%;
             text-align: center;
             z-index: 1000;
+            flex-shrink: 0;
         }
         #closeResultBtn {
             padding: 15px 30px;
@@ -227,15 +227,11 @@
 
         // --- 🚪「結果を閉じる」ボタンの処理 ---
         document.getElementById('closeResultBtn').addEventListener('click', () => {
-            // 念のためここでもマイクとオーディオを完全に停止して解放
             if (audioStream) audioStream.getTracks().forEach(track => track.stop());
             if (audioContext && audioContext.state !== 'closed') audioContext.close();
-            
-            // 親ウィンドウ（にふなみ本体）へ「終わったよ」の合図を送る
             window.parent.postMessage('MINIGAME_FINISHED', '*');
         });
 
-        // --- 📱 即時起動対応・ダイレクトタップシステム ---
         const menuRows = document.querySelectorAll('.menu-row');
         menuRows.forEach((row, idx) => {
             row.addEventListener('touchstart', (e) => { e.preventDefault(); executeGameStart(idx); });
@@ -407,7 +403,6 @@
                 isGameOver = true; clearInterval(timerInterval); drawGame();
                 if (audioStream) audioStream.getTracks().forEach(track => track.stop());
                 if (audioContext && audioContext.state !== 'closed') audioContext.close();
-                // リザルトを少し見せてから、戻るボタンを表示する
                 setTimeout(() => { closeBtnContainer.style.display = 'block'; }, 800);
             }
         }
@@ -566,7 +561,6 @@
             // 🛑 ゲーム終了処理
             function endGame() {
                 isGameOver = true; clearInterval(timerInterval); drawGame();
-                // 戻るボタンを表示する
                 setTimeout(() => { closeBtnContainer.style.display = 'block'; }, 800);
             }
         }
@@ -661,7 +655,6 @@
                 isGameOver = true; clearInterval(timerInterval); drawGame(); cancelAnimationFrame(animId);
                 if (audioStream) audioStream.getTracks().forEach(t => t.stop());
                 if (audioContext && audioContext.state !== 'closed') audioContext.close();
-                // 戻るボタンを表示する
                 setTimeout(() => { closeBtnContainer.style.display = 'block'; }, 800);
             }
         }
