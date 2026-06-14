@@ -513,10 +513,10 @@
         </div>
     </div>
 
-    <div id="renderOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
-        <h2 style="color: #ff4488; margin-bottom: 5px; font-size: 1.2rem; letter-spacing: 2px;">MOVIE SAVING...</h2>
-        <p style="margin-bottom: 15px; font-size: 0.75rem; opacity: 0.9; text-align: center;">⚠️ このタブを開いたままお待ちください<br>（別タブを開くとエラーになることがあります）</p>
-        <iframe id="miniGameIframe" src="" style="width: 90%; max-width: 400px; height: 50vh; border: 2px solid rgba(255,255,255,0.2); border-radius: 10px; background: #000;"></iframe>
+    <div id="renderOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 6vh; backdrop-filter: blur(5px);">
+        <h2 style="color: #ff4488; margin-bottom: 5px; font-size: 1.2rem; letter-spacing: 2px; flex-shrink: 0;">MOVIE SAVING...</h2>
+        <p style="margin-bottom: 15px; font-size: 0.75rem; opacity: 0.9; text-align: center; flex-shrink: 0;">⚠️ このタブを開いたままお待ちください<br>（別タブを開くとエラーになることがあります）</p>
+        <iframe id="miniGameIframe" src="" style="width: 100%; max-width: 500px; flex: 1; border: none; background: transparent; margin-bottom: 4vh;"></iframe>
     </div>
 
     <script>
@@ -987,11 +987,10 @@
             unlockMenus(); drawStaticWave();
         }
 
-        // オーバーレイを閉じてメモリとデータを完全にリセットする共通関数
         function hideOverlayAndCleanup() {
             document.getElementById('renderOverlay').style.display = 'none';
-            document.getElementById('miniGameIframe').src = 'about:blank'; // iframeのメモリを完全解放
-            resetDataWithoutPrompt(); // 録音データをリセット
+            document.getElementById('miniGameIframe').src = 'about:blank'; 
+            resetDataWithoutPrompt(); 
         }
 
         playPauseBtn.addEventListener('click', () => {
@@ -1022,10 +1021,8 @@
                 return;
             }
 
-            // オーバーレイを表示して操作をロックし、ミニゲームをセット
             document.getElementById('renderOverlay').style.display = 'flex';
             document.getElementById('miniGameIframe').src = 'mini-game.html';
-            
             downloadBtn.style.pointerEvents = 'none';
 
             const renderAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1064,15 +1061,12 @@
                 
                 downloadBtn.style.pointerEvents = 'auto'; 
                 
-                // 動画の保存が完了したらユーザーに選択させる
-                const finishGame = confirm("お待たせしました。動画の保存完了です！\n\nミニゲームを終わりますか？\n「キャンセル」を押すと最後まで遊べます");
+                const finishGame = confirm("お待たせしました。動画の保存完了です！\n\nミニゲームを終わりますか？\n（「キャンセル」を押すと最後まで遊べます）");
                 
                 if (finishGame) {
-                    // OK（終わる）を選んだ場合：画面を閉じてデータを初期化
                     hideOverlayAndCleanup();
-                    alert("お疲れ様です。新しく録音できます^.ˬ.^ฅⳊ");
+                    alert("録音データを自動リセットしました。新しく録音できます^.ˬ.^ฅⳊ");
                 } 
-                // キャンセルを選んだ場合は何もしない（そのままゲームを続けさせる）
             };
 
             movieRecorder.start(); bufferSource.start(0);
@@ -1089,12 +1083,10 @@
             renderFrame();
         });
 
-        // --- ミニゲーム側からの「終わったよ」の合図を受け取る仕組み ---
         window.addEventListener('message', (event) => {
-            // iframeからのメッセージを受信したら初期化を実行
             if (event.data === 'MINIGAME_FINISHED') {
                 hideOverlayAndCleanup();
-                alert("ミニゲーム終了お疲れ様でした！\n新しく録音できます^.ˬ.^ฅⳊ");
+                alert("ミニゲーム終了お疲れ様でした！\n録音データを自動リセットしました。新しく録音できます^.ˬ.^ฅⳊ");
             }
         });
 
